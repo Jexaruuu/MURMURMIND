@@ -1,9 +1,9 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import {
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
 } from "@expo-google-fonts/poppins";
 import { useFonts } from "expo-font";
 import { Image } from "expo-image";
@@ -47,7 +47,7 @@ export default function Login() {
     <ThemedView style={styles.container}>
       <Image source={require("@/assets/images/murmurbg.png")} style={styles.bg} contentFit="cover" pointerEvents="none" />
 
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12), opacity: 0 }]}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <ThemedText style={styles.backText}>‹</ThemedText>
         </Pressable>
@@ -64,47 +64,57 @@ export default function Login() {
         <ThemedText style={[styles.brand, { fontFamily: "Poppins_600SemiBold" }]}>Murmurmind</ThemedText>
       </View>
 
+      <View style={[styles.sheet, { paddingBottom: 24 + Math.max(insets.bottom, 16) }]}>
+        <ThemedText style={[styles.sheetTitle, { fontFamily: "Poppins_500Medium" }]}>Welcome Back</ThemedText>
+
+        <View style={styles.form}>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            placeholderTextColor="#9ca3af"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            style={[styles.input, { fontFamily: "Poppins_400Regular" }]}
+          />
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            placeholderTextColor="#9ca3af"
+            secureTextEntry
+            style={[styles.input, { fontFamily: "Poppins_400Regular" }]}
+          />
+
+          <Pressable onPress={() => router.push("/menu")} style={styles.loginBtnWrap}>
+            <LinearGradient
+              colors={["#595959", "#595959"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.loginBtn}
+            >
+              <ThemedText style={[styles.loginLabel, { fontFamily: "Poppins_600SemiBold" }]}>LOGIN</ThemedText>
+            </LinearGradient>
+          </Pressable>
+
+          <Pressable onPress={() => router.push("/signup")} style={styles.secondaryBtn}>
+            <ThemedText style={[styles.secondaryText, { fontFamily: "Poppins_600SemiBold" }]}>
+              Create an account
+            </ThemedText>
+          </Pressable>
+        </View>
+      </View>
+
       <View style={styles.panelWrap}>
         <View style={[styles.panel, { paddingBottom: 24 + Math.max(insets.bottom, 12) }]}>
           <Image source={require("@/assets/images/murmurbg.png")} style={styles.panelPattern} contentFit="cover" />
           <LinearGradient colors={["rgba(0,0,0,0.55)", "rgba(0,0,0,1)"]} style={StyleSheet.absoluteFillObject} />
           <View style={styles.panelInner}>
-            <ThemedText style={[styles.welcome, { fontFamily: "Poppins_600SemiBold" }]}>Welcome Back</ThemedText>
-            <ThemedText style={[styles.sub, { fontFamily: "Poppins_400Regular" }]}>Enter your details below</ThemedText>
-
-            <View style={styles.field}>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Email Address"
-                placeholderTextColor="#6b7280"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                style={[styles.input, { fontFamily: "Poppins_400Regular" }]}
-              />
-            </View>
-
-            <View style={styles.field}>
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Password"
-                placeholderTextColor="#6b7280"
-                secureTextEntry
-                style={[styles.input, { fontFamily: "Poppins_400Regular" }]}
-              />
-            </View>
-
-            <Pressable onPress={() => router.push("/menu")} style={styles.loginBtnWrap}>
-              <LinearGradient
-                colors={["#5a5a5a", "#5a5a5a"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.loginGradient}
-              >
-                <ThemedText style={[styles.loginLabel, { fontFamily: "Poppins_600SemiBold" }]}>SIGNUP</ThemedText>
-              </LinearGradient>
-            </Pressable>
+            <ThemedText style={[styles.welcome, { fontFamily: "Poppins_600SemiBold" }]} />
+            <ThemedText style={[styles.sub, { fontFamily: "Poppins_400Regular" }]} />
+            <View style={styles.field} />
+            <View style={styles.field} />
+            <Pressable onPress={() => router.push("/menu")} style={styles.loginBtnWrap} />
           </View>
         </View>
       </View>
@@ -113,19 +123,58 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "white" },
-  bg: { ...StyleSheet.absoluteFillObject, opacity: 0 },
+  container: { flex: 1, alignItems: "center", justifyContent: "center" },
+  bg: { ...StyleSheet.absoluteFillObject },
   header: { position: "absolute", top: 0, left: 0, right: 0, height: 72, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },
   backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   backText: { fontSize: 28, color: "#111" },
   signupPill: { paddingHorizontal: 16, height: 32, borderRadius: 16, backgroundColor: "#111", alignItems: "center", justifyContent: "center" },
   signupPillText: { color: "white", fontSize: 12, letterSpacing: 0.5 },
 
-  centerWrap: { alignItems: "center", marginTop: 96, marginBottom: 12 },
-  logo: { width: 84, height: 84, borderRadius: 42, marginBottom: 10 },
-  brand: { fontSize: 20, color: "#111" },
+  centerWrap: { alignItems: "center", justifyContent: "center", gap: 12, marginTop: -40 },
+  logo: { width: 250, height: 250, borderRadius: 9999, marginBottom: -70 },
+  brand: { color: "white", letterSpacing: 0.5, marginBottom: 335, fontSize: 30 },
 
-  panelWrap: { flex: 1, justifyContent: "flex-end" },
+  sheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "white",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    alignItems: "center",
+    gap: 12
+  },
+  sheetTitle: { fontSize: 16, marginBottom: 6, color: "#000" },
+
+  form: { width: "100%", gap: 12, maxWidth: 420 },
+  input: {
+    backgroundColor: "white",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb"
+  },
+
+  loginBtnWrap: { width: "100%", borderRadius: 18, overflow: "hidden" },
+  loginBtn: { paddingVertical: 14, borderRadius: 18, alignItems: "center" },
+  loginLabel: { color: "white", fontSize: 14, letterSpacing: 1 },
+
+  secondaryBtn: {
+    width: "100%",
+    backgroundColor: "#efefef",
+    borderRadius: 18,
+    paddingVertical: 14,
+    alignItems: "center"
+  },
+  secondaryText: { color: "#111", fontSize: 14, letterSpacing: 0.5 },
+
+  panelWrap: { position: "absolute", opacity: 0 },
   panel: { marginHorizontal: 12, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden", backgroundColor: "#000" },
   panelPattern: { ...StyleSheet.absoluteFillObject, opacity: 0.22 },
   panelInner: { paddingHorizontal: 24, paddingTop: 28, gap: 16 },
@@ -133,10 +182,5 @@ const styles = StyleSheet.create({
   welcome: { fontSize: 28, color: "white", textAlign: "left" },
   sub: { fontSize: 13, color: "#d1d5db", marginTop: -4 },
 
-  field: { marginTop: 12 },
-  input: { backgroundColor: "white", color: "#111", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 14, borderWidth: 0, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
-
-  loginBtnWrap: { marginTop: 18, borderRadius: 16, overflow: "hidden" },
-  loginGradient: { paddingVertical: 14, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  loginLabel: { color: "white", fontSize: 14, letterSpacing: 1 }
+  field: { marginTop: 12 }
 });

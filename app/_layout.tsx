@@ -8,7 +8,6 @@ export default function RootLayout() {
       <Stack.Screen name="signup" options={{ animation: "slide_from_right", gestureEnabled: true, gestureDirection: "horizontal" }} />
       <Stack.Screen name="menu" options={{ animation: "slide_from_right", gestureEnabled: true, gestureDirection: "horizontal" }} />
       <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-      <Stack.Screen name="(tabs)" />
     </Stack>
   );
 }
