@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "999284187418",
+    "project_id": "its411-barsana-project",
+    "storage_bucket": "its411-barsana-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:999284187418:android:e6033845eee1488e024ca3",
+        "android_client_info": {
+          "package_name": "com.jexterbarsana.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtRxFtutkVxhU7ngsGU_twwRsnryJqAOI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:999284187418:android:5aa00f400d796b6c024ca3",
+        "android_client_info": {
+          "package_name": "zums.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtRxFtutkVxhU7ngsGU_twwRsnryJqAOI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

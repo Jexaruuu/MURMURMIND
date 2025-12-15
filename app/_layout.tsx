@@ -1,26 +1,14 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { Stack } from "expo-router";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <Stack initialRouteName="welcome" screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="welcome" options={{ animation: "slide_from_right", gestureEnabled: true, gestureDirection: "horizontal" }} />
+      <Stack.Screen name="login" options={{ animation: "slide_from_right", gestureEnabled: true, gestureDirection: "horizontal" }} />
+      <Stack.Screen name="signup" options={{ animation: "slide_from_right", gestureEnabled: true, gestureDirection: "horizontal" }} />
+      <Stack.Screen name="menu" options={{ animation: "slide_from_right", gestureEnabled: true, gestureDirection: "horizontal" }} />
+      <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+      <Stack.Screen name="(tabs)" />
+    </Stack>
   );
 }
-
-
