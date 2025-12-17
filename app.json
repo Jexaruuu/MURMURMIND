@@ -20,7 +20,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.jexterbarsana.dev"
+      "package": "com.jexterbarsana.dev",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",

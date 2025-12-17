@@ -1,5 +1,6 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { auth, db } from "@/firebase";
 import {
   Poppins_400Regular,
   Poppins_500Medium,
@@ -9,6 +10,8 @@ import { useFonts } from "expo-font";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,6 +22,8 @@ export default function Signup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
@@ -43,6 +48,50 @@ export default function Signup() {
     inputRange: [0, 1],
     outputRange: ["0deg", "360deg"],
   });
+
+  const prettyAuthError = (m: string) => {
+    if (/auth\/invalid-email/i.test(m)) return "Invalid email.";
+    if (/auth\/email-already-in-use/i.test(m)) return "Email already in use.";
+    if (/auth\/weak-password/i.test(m)) return "Password is too weak (use 6+ characters).";
+    if (/auth\/network-request-failed/i.test(m)) return "Network error. Check your internet.";
+    return "Signup failed. Please try again.";
+  };
+
+  const onSignup = async () => {
+    if (submitting) return;
+    setError("");
+
+    const cleanName = name.trim();
+    const cleanEmail = email.trim();
+    const cleanPass = password;
+
+    if (!cleanName) return setError("Please enter a username.");
+    if (!cleanEmail) return setError("Please enter your email.");
+    if (!cleanPass) return setError("Please enter your password.");
+
+    setSubmitting(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
+
+      try {
+        await updateProfile(cred.user, { displayName: cleanName });
+      } catch {}
+
+      await setDoc(doc(db, "users", cred.user.uid), {
+        uid: cred.user.uid,
+        name: cleanName,
+        email: cred.user.email || cleanEmail,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      router.replace("/menu");
+    } catch (e: any) {
+      setError(prettyAuthError(e?.message || String(e)));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -94,14 +143,22 @@ export default function Signup() {
             style={[styles.input, { fontFamily: "Poppins_400Regular" }]}
           />
 
-          <Pressable onPress={() => router.push("/menu")} style={styles.loginBtnWrap}>
+          {!!error && (
+            <ThemedText style={{ color: "#ef4444", fontSize: 12, marginTop: -4 }}>
+              {error}
+            </ThemedText>
+          )}
+
+          <Pressable onPress={onSignup} style={styles.loginBtnWrap}>
             <LinearGradient
               colors={["#595959", "#595959"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.loginBtn}
+              style={[styles.loginBtn, submitting && { opacity: 0.7 }]}
             >
-              <ThemedText style={[styles.loginLabel, { fontFamily: "Poppins_600SemiBold" }]}>SIGN UP</ThemedText>
+              <ThemedText style={[styles.loginLabel, { fontFamily: "Poppins_600SemiBold" }]}>
+                {submitting ? "PLEASE WAIT..." : "SIGN UP"}
+              </ThemedText>
             </LinearGradient>
           </Pressable>
 

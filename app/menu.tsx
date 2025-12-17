@@ -1,8 +1,11 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { auth, db } from "@/firebase";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 const tiles = [
@@ -127,21 +130,69 @@ const FEED = [
 const SHOW_SOCIAL = false;
 const SHOW_BOTTOM_NAV = false;
 
+const fallbackAvatar = require("@/assets/images/murmuriconblack.png");
+
 export default function Menu() {
   const [qIndex, setQIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [username, setUsername] = useState("Username");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoBroken, setPhotoBroken] = useState(false);
   const quote = useMemo(() => QUOTES[qIndex % QUOTES.length], [qIndex]);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setPhotoBroken(false);
+
+      if (!u) {
+        setUsername("Guest");
+        setPhotoUrl(null);
+        return;
+      }
+
+      const quick =
+        (u.displayName || "").trim() ||
+        (u.email ? u.email.split("@")[0] : "").trim();
+
+      if (quick) setUsername(quick);
+
+      const authPhoto = typeof u.photoURL === "string" && u.photoURL.trim() ? u.photoURL.trim() : null;
+      setPhotoUrl(authPhoto);
+
+      try {
+        const snap = await getDoc(doc(db, "users", u.uid));
+        if (snap.exists()) {
+          const data: any = snap.data();
+          const n = typeof data?.name === "string" ? data.name.trim() : "";
+          if (n) setUsername(n);
+
+          const fsPhoto =
+            typeof data?.photoUrl === "string" && data.photoUrl.trim()
+              ? data.photoUrl.trim()
+              : null;
+
+          if (fsPhoto) setPhotoUrl(fsPhoto);
+        }
+      } catch {}
+    });
+
+    return () => unsub();
+  }, []);
+
+  const avatarSource =
+    photoUrl && !photoBroken ? { uri: photoUrl } : fallbackAvatar;
 
   return (
     <ThemedView style={styles.container}>
       <View style={styles.topBar}>
         <View style={styles.userWrap}>
           <Image
-            source={{ uri: "https://api.dicebear.com/7.x/thumbs/png?seed=User" }}
+            source={avatarSource}
             style={styles.userAvatar}
             contentFit="cover"
+            onError={() => setPhotoBroken(true)}
           />
-          <ThemedText style={styles.userName}>Username</ThemedText>
+          <ThemedText style={styles.userName}>{username}</ThemedText>
         </View>
         <Pressable onPress={() => setMenuOpen((v) => !v)} style={styles.menuBtn}>
           <ThemedText style={styles.menuIcon}>☰</ThemedText>
@@ -178,7 +229,11 @@ export default function Menu() {
             <View key={i} style={styles.post}>
               <View style={styles.postHead}>
                 <Image
-                  source={{ uri: `https://api.dicebear.com/7.x/thumbs/png?seed=${encodeURIComponent("User-"+i+"-"+text)}` }}
+                  source={
+                    !photoUrl || photoBroken
+                      ? fallbackAvatar
+                      : { uri: `https://api.dicebear.com/7.x/thumbs/png?seed=${encodeURIComponent("User-"+i+"-"+text)}` }
+                  }
                   style={styles.avatarImg}
                   contentFit="cover"
                 />
@@ -232,12 +287,13 @@ export default function Menu() {
           <View style={styles.menuSheet}>
             <View style={styles.menuHeader}>
               <Image
-                source={{ uri: "https://api.dicebear.com/7.x/thumbs/png?seed=User" }}
+                source={avatarSource}
                 style={styles.menuHeaderAvatar}
                 contentFit="cover"
+                onError={() => setPhotoBroken(true)}
               />
               <View style={styles.menuHeaderTextWrap}>
-                <ThemedText style={styles.menuHeaderName}>Username</ThemedText>
+                <ThemedText style={styles.menuHeaderName}>{username}</ThemedText>
                 <ThemedText style={styles.menuHeaderSub}>Quick actions</ThemedText>
               </View>
             </View>
