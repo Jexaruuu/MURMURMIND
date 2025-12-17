@@ -1,3 +1,4 @@
+import Navigation from "@/components/navigation";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { auth, db } from "@/firebase";
@@ -464,22 +465,15 @@ export default function Menu() {
   return (
     <ThemedView style={styles.container}>
       <StatusBar style="dark" />
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 12) + 10 }]}>
-        <View style={styles.userWrap}>
-          <Image
-            source={avatarSource}
-            style={styles.userAvatar}
-            contentFit="cover"
-            onError={() => {
-              if (avatarCanError) setPhotoBroken(true);
-            }}
-          />
-          <ThemedText style={styles.userName}>{username}</ThemedText>
-        </View>
-        <Pressable onPress={toggleMenu} style={styles.menuBtn}>
-          <ThemedText style={styles.menuIcon}>☰</ThemedText>
-        </Pressable>
-      </View>
+
+      <Navigation
+        username={username}
+        avatarSource={avatarSource}
+        onMenuPress={toggleMenu}
+        onAvatarError={() => {
+          if (avatarCanError) setPhotoBroken(true);
+        }}
+      />
 
       <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
         <View style={styles.quoteCard}>
@@ -696,13 +690,13 @@ export default function Menu() {
                     <View style={styles.field}>
                       <ThemedText style={styles.fieldLabel}>Profile picture</ThemedText>
 
-                      <View style={styles.avatarPickerTop}>
-                        <Image source={editAvatarSource} style={styles.editAvatarPreview} contentFit="cover" />
-                        <View style={styles.avatarPickerMeta}>
-                          <ThemedText style={styles.avatarPickerTitle}>Choose an avatar</ThemedText>
-                          <ThemedText style={styles.avatarPickerSub}>Pick one below and save changes.</ThemedText>
+                      <Pressable style={styles.photoRow} onPress={pickImage}>
+                        <Image source={editAvatarSource} style={styles.editAvatar} contentFit="cover" />
+                        <View style={styles.photoMeta}>
+                          <ThemedText style={styles.photoTitle}>Upload from gallery</ThemedText>
+                          <ThemedText style={styles.photoSub}>Tap to pick an image.</ThemedText>
                         </View>
-                      </View>
+                      </Pressable>
 
                       <View style={styles.avatarGrid}>
                         {AVATAR_CHOICES.map((a) => {
@@ -760,18 +754,6 @@ export default function Menu() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "white" },
-  topBar: {
-    paddingTop: 28,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  userWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
-  userAvatar: { width: 28, height: 28, borderRadius: 8, backgroundColor: "#e5e7eb" },
-  userName: { fontSize: 14, color: "#111" },
-  menuBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", alignSelf: "flex-end" },
-  menuIcon: { fontSize: 20, color: "#000" },
 
   scrollPad: { paddingHorizontal: 12, paddingBottom: 160 },
 
