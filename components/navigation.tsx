@@ -37,6 +37,8 @@ export default function Navigation({
 const styles = StyleSheet.create({
   topBar: {
     paddingHorizontal: 12,
+    paddingBottom: 10,
+    backgroundColor: "#000000",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
