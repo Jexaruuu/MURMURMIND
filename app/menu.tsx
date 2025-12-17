@@ -1,18 +1,22 @@
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { auth, db } from "@/firebase";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { onAuthStateChanged, signOut, updateEmail, updatePassword, updateProfile } from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const tiles = [
   { label: "Home", href: "/" },
   { label: "Explore", href: "/(tabs)/explore" },
   { label: "Login", href: "/login" },
-  { label: "Sign up", href: "/signup" }
+  { label: "Sign up", href: "/signup" },
 ];
 
 const QUOTES = [
@@ -115,7 +119,7 @@ const QUOTES = [
   `"Start with why, finish with how."`,
   `"Effort compounds."`,
   `"Make the next hour count."`,
-  `"Keep showing up."`
+  `"Keep showing up."`,
 ];
 
 const FEED = [
@@ -124,21 +128,109 @@ const FEED = [
   "Your future self is watching—impress them.",
   "One more try can change everything.",
   "Discipline beats motivation on tough days.",
-  "You’re closer than you think—keep going."
+  "You’re closer than you think—keep going.",
 ];
 
 const SHOW_SOCIAL = false;
 const SHOW_BOTTOM_NAV = false;
 
-const fallbackAvatar = require("@/assets/images/murmuriconblack.png");
+const fallbackAvatar = require("@/assets/images/murmurblack.png");
+const editPlaceholder = require("@/assets/images/murmurblack.png");
+
+const MENU_WIDTH = 260;
+const MENU_ICON_SIZE = 18;
+
+const ASSET_PREFIX = "asset:";
+
+const AVATAR_CHOICES = [
+  { key: `${ASSET_PREFIX}murmurblack`, label: "Bla", src: require("@/assets/images/murmurblack.png") },
+  { key: `${ASSET_PREFIX}murmuryellow`, label: "Yel", src: require("@/assets/images/murmuryellow.png") },
+  { key: `${ASSET_PREFIX}murmurblue`, label: "Blu", src: require("@/assets/images/murmurblue.png") },
+  { key: `${ASSET_PREFIX}murmurorange`, label: "Ora", src: require("@/assets/images/murmurorange.png") },
+  { key: `${ASSET_PREFIX}murmurred`, label: "Red", src: require("@/assets/images/murmurred.png") },
+  { key: `${ASSET_PREFIX}murmurgreen`, label: "Gre", src: require("@/assets/images/murmurgreen.png") },
+];
+
+const AVATAR_ASSETS: Record<string, any> = AVATAR_CHOICES.reduce((acc: any, a) => {
+  acc[a.key] = a.src;
+  return acc;
+}, {});
 
 export default function Menu() {
   const [qIndex, setQIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+
   const [username, setUsername] = useState("Username");
+  const [userEmail, setUserEmail] = useState<string>("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoBroken, setPhotoBroken] = useState(false);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editPhoto, setEditPhoto] = useState<string | null>(null);
+
+  const [baseName, setBaseName] = useState("");
+  const [baseEmail, setBaseEmail] = useState("");
+  const [basePhoto, setBasePhoto] = useState<string | null>(null);
+
+  const [saving, setSaving] = useState(false);
+
+  const [saveNotice, setSaveNotice] = useState("");
+  const [saveOk, setSaveOk] = useState(true);
+  const noticeTimer = useRef<any>(null);
+
   const quote = useMemo(() => QUOTES[qIndex % QUOTES.length], [qIndex]);
+  const insets = useSafeAreaInsets();
+
+  const menuX = useRef(new Animated.Value(MENU_WIDTH)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  const assetFor = (v: string | null | undefined) => {
+    if (!v) return null;
+    if (typeof v !== "string") return null;
+    const k = v.trim();
+    if (!k.startsWith(ASSET_PREFIX)) return null;
+    return AVATAR_ASSETS[k] || null;
+  };
+
+  const avatarAsset = assetFor(photoUrl);
+  const avatarSource = avatarAsset ? avatarAsset : photoUrl && !photoBroken ? { uri: photoUrl } : fallbackAvatar;
+  const avatarCanError = !avatarAsset && !!photoUrl;
+
+  const isHttpUrl = (v: string | null | undefined) => {
+    if (!v) return false;
+    const s = String(v).trim().toLowerCase();
+    return s.startsWith("http://") || s.startsWith("https://");
+  };
+
+  const friendlyError = (err: any) => {
+    const code = typeof err?.code === "string" ? err.code : "";
+    if (code.includes("permission-denied")) return "Firestore permission denied. Fix your Firestore Rules.";
+    if (code === "auth/requires-recent-login") return "Please log in again to change email/password.";
+    if (code === "auth/email-already-in-use") return "That email is already in use.";
+    if (code === "auth/invalid-email") return "Invalid email.";
+    if (code === "auth/weak-password") return "Password must be at least 6 characters.";
+    if (code === "auth/invalid-photo-url") return "Profile photo must be a valid URL. Avatars are saved in Firestore.";
+    return "Update failed. Please try again.";
+  };
+
+  const showNotice = (text: string, ok = true) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setSaveOk(ok);
+    setSaveNotice(text);
+    noticeTimer.current = setTimeout(() => {
+      setSaveNotice("");
+    }, 2600);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -146,15 +238,16 @@ export default function Menu() {
 
       if (!u) {
         setUsername("Guest");
+        setUserEmail("");
         setPhotoUrl(null);
         return;
       }
 
-      const quick =
-        (u.displayName || "").trim() ||
-        (u.email ? u.email.split("@")[0] : "").trim();
-
+      const quick = (u.displayName || "").trim() || (u.email ? u.email.split("@")[0] : "").trim();
       if (quick) setUsername(quick);
+
+      const e = typeof u.email === "string" ? u.email.trim() : "";
+      setUserEmail(e);
 
       const authPhoto = typeof u.photoURL === "string" && u.photoURL.trim() ? u.photoURL.trim() : null;
       setPhotoUrl(authPhoto);
@@ -166,11 +259,10 @@ export default function Menu() {
           const n = typeof data?.name === "string" ? data.name.trim() : "";
           if (n) setUsername(n);
 
-          const fsPhoto =
-            typeof data?.photoUrl === "string" && data.photoUrl.trim()
-              ? data.photoUrl.trim()
-              : null;
+          const mail = typeof data?.email === "string" ? data.email.trim() : "";
+          if (mail) setUserEmail(mail);
 
+          const fsPhoto = typeof data?.photoUrl === "string" && data.photoUrl.trim() ? data.photoUrl.trim() : null;
           if (fsPhoto) setPhotoUrl(fsPhoto);
         }
       } catch {}
@@ -179,29 +271,221 @@ export default function Menu() {
     return () => unsub();
   }, []);
 
-  const avatarSource =
-    photoUrl && !photoBroken ? { uri: photoUrl } : fallbackAvatar;
+  const openMenu = () => {
+    if (menuVisible) return;
+    setMenuOpen(true);
+    setMenuVisible(true);
+    menuX.setValue(MENU_WIDTH);
+    backdropOpacity.setValue(0);
+    Animated.parallel([
+      Animated.timing(menuX, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeMenu = () => {
+    if (!menuVisible) return;
+    Animated.parallel([
+      Animated.timing(menuX, {
+        toValue: MENU_WIDTH,
+        duration: 230,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setMenuOpen(false);
+        setMenuVisible(false);
+        setEditOpen(false);
+        setSaveNotice("");
+      }
+    });
+  };
+
+  const toggleMenu = () => {
+    if (menuVisible || menuOpen) closeMenu();
+    else openMenu();
+  };
+
+  const openEdit = () => {
+    const n = username === "Guest" ? "" : username;
+    const e = userEmail || "";
+    const p = photoUrl || null;
+
+    setEditOpen(true);
+    setEditName(n);
+    setEditEmail(e);
+    setEditPassword("");
+    setEditPhoto(p);
+
+    setBaseName(n);
+    setBaseEmail(e);
+    setBasePhoto(p);
+
+    setSaveNotice("");
+  };
+
+  const pickImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+        base64: true,
+      });
+
+      if (res.canceled) return;
+      const asset = res.assets?.[0];
+      if (!asset) return;
+
+      if (asset.base64) {
+        const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
+        setEditPhoto(dataUrl);
+        setPhotoBroken(false);
+        setPhotoUrl(dataUrl);
+        setSaveNotice("");
+        return;
+      }
+
+      if (asset.uri) {
+        setEditPhoto(asset.uri);
+        setPhotoBroken(false);
+        setPhotoUrl(asset.uri);
+        setSaveNotice("");
+      }
+    } catch {}
+  };
+
+  const editAsset = assetFor(editPhoto);
+  const editAvatarSource = editAsset ? editAsset : editPhoto ? { uri: editPhoto } : editPlaceholder;
+
+  const trim = (v: any) => (typeof v === "string" ? v.trim() : "");
+  const same = (a: any, b: any) => trim(a) === trim(b);
+
+  const nameChanged = trim(editName) && !same(editName, baseName);
+  const emailChanged = trim(editEmail) && !same(editEmail, baseEmail);
+  const photoChanged = (editPhoto || null) !== (basePhoto || null);
+  const passwordReady = editPassword.length === 0 || editPassword.length >= 6;
+  const passwordChanged = editPassword.length >= 6;
+
+  const hasChanges = (nameChanged || emailChanged || photoChanged || passwordChanged) && passwordReady;
+
+  const performSave = async () => {
+    const u = auth.currentUser;
+    if (!u) {
+      showNotice("Please log in first", false);
+      return;
+    }
+
+    if (!hasChanges) {
+      showNotice(passwordReady ? "No changes to save" : "Password must be at least 6 characters.", false);
+      return;
+    }
+
+    const nextName = editName.trim();
+    const nextEmail = editEmail.trim();
+    const nextPassword = editPassword;
+
+    setSaving(true);
+
+    try {
+      const fsPatch: any = { updatedAt: Date.now() };
+      if (nextName && !same(nextName, baseName)) fsPatch.name = nextName;
+      if (nextEmail && !same(nextEmail, baseEmail)) fsPatch.email = nextEmail;
+      if (photoChanged && editPhoto) fsPatch.photoUrl = editPhoto;
+
+      await setDoc(doc(db, "users", u.uid), fsPatch, { merge: true });
+
+      if (nextName && nextName !== (u.displayName || "").trim()) {
+        await updateProfile(u, { displayName: nextName });
+      }
+
+      if (isHttpUrl(editPhoto) && editPhoto !== (u.photoURL || "").trim()) {
+        await updateProfile(u, { photoURL: editPhoto });
+      }
+
+      if (nextEmail && nextEmail !== (u.email || "").trim()) {
+        await updateEmail(u, nextEmail);
+        setUserEmail(nextEmail);
+      }
+
+      let didPasswordChange = false;
+      if (nextPassword && nextPassword.length >= 6) {
+        await updatePassword(u, nextPassword);
+        didPasswordChange = true;
+      }
+
+      if (nextName) setUsername(nextName);
+      if (photoChanged && editPhoto) {
+        setPhotoUrl(editPhoto);
+        setPhotoBroken(false);
+      }
+
+      if (didPasswordChange) {
+        closeMenu();
+        await signOut(auth);
+        router.replace("/login");
+        return;
+      }
+
+      setBaseName(nextName || baseName);
+      setBaseEmail(nextEmail || baseEmail);
+      setBasePhoto(photoChanged ? (editPhoto || null) : basePhoto);
+      setEditPassword("");
+
+      showNotice("Changes successfully", true);
+    } catch (err: any) {
+      showNotice(friendlyError(err), false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.topBar}>
+      <StatusBar style="dark" />
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 12) + 10 }]}>
         <View style={styles.userWrap}>
           <Image
             source={avatarSource}
             style={styles.userAvatar}
             contentFit="cover"
-            onError={() => setPhotoBroken(true)}
+            onError={() => {
+              if (avatarCanError) setPhotoBroken(true);
+            }}
           />
           <ThemedText style={styles.userName}>{username}</ThemedText>
         </View>
-        <Pressable onPress={() => setMenuOpen((v) => !v)} style={styles.menuBtn}>
+        <Pressable onPress={toggleMenu} style={styles.menuBtn}>
           <ThemedText style={styles.menuIcon}>☰</ThemedText>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
         <View style={styles.quoteCard}>
-          <ThemedText type="title" style={styles.quoteTitle}>Quote of the Day</ThemedText>
+          <ThemedText type="title" style={styles.quoteTitle}>
+            Quote of the Day
+          </ThemedText>
           <ThemedText style={styles.quoteText}>{quote}</ThemedText>
 
           <View style={styles.quoteActions}>
@@ -228,15 +512,7 @@ export default function Menu() {
           {FEED.map((text, i) => (
             <View key={i} style={styles.post}>
               <View style={styles.postHead}>
-                <Image
-                  source={
-                    !photoUrl || photoBroken
-                      ? fallbackAvatar
-                      : { uri: `https://api.dicebear.com/7.x/thumbs/png?seed=${encodeURIComponent("User-"+i+"-"+text)}` }
-                  }
-                  style={styles.avatarImg}
-                  contentFit="cover"
-                />
+                <Image source={fallbackAvatar} style={styles.avatarImg} contentFit="cover" />
                 <View style={styles.nameWrap}>
                   <ThemedText style={styles.name}>Anonymous</ThemedText>
                 </View>
@@ -280,53 +556,202 @@ export default function Menu() {
         </View>
       )}
 
-      {menuOpen && (
+      {menuVisible && (
         <>
-          <Pressable style={styles.backdrop} onPress={() => setMenuOpen(false)} />
+          <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} pointerEvents="none" />
+          <Pressable style={[styles.dismissArea, { right: MENU_WIDTH }]} onPress={closeMenu} />
           <View style={styles.menuCaret} />
-          <View style={styles.menuSheet}>
-            <View style={styles.menuHeader}>
-              <Image
-                source={avatarSource}
-                style={styles.menuHeaderAvatar}
-                contentFit="cover"
-                onError={() => setPhotoBroken(true)}
-              />
-              <View style={styles.menuHeaderTextWrap}>
-                <ThemedText style={styles.menuHeaderName}>{username}</ThemedText>
-                <ThemedText style={styles.menuHeaderSub}>Quick actions</ThemedText>
+          <Animated.View
+            style={[
+              styles.menuSheet,
+              {
+                width: MENU_WIDTH,
+                transform: [{ translateX: menuX }],
+                paddingTop: 14 + Math.max(insets.top, 12),
+                paddingBottom: 16 + Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            <View style={styles.menuTopRow}>
+              <View style={styles.menuTopLeft}>
+                {editOpen && (
+                  <Pressable
+                    style={styles.backBtn}
+                    onPress={() => {
+                      setEditOpen(false);
+                      setSaveNotice("");
+                    }}
+                  >
+                    <ThemedText style={styles.backIcon}>‹</ThemedText>
+                  </Pressable>
+                )}
+                <ThemedText style={styles.menuTitle}>{editOpen ? "Edit profile" : "Menu"}</ThemedText>
               </View>
+              <Pressable onPress={closeMenu} style={styles.closeBtn}>
+                <ThemedText style={styles.closeIcon}>✕</ThemedText>
+              </Pressable>
             </View>
-            <View style={styles.menuDivider} />
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setMenuOpen(false);
-                router.push("/notifications");
-              }}
-            >
-              <ThemedText style={styles.menuText}>Notifications</ThemedText>
-            </Pressable>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setMenuOpen(false);
-                router.push("/settings");
-              }}
-            >
-              <ThemedText style={styles.menuText}>Settings</ThemedText>
-            </Pressable>
-            <View style={styles.menuDivider} />
-            <Pressable
-              style={[styles.menuItem, styles.logoutItem]}
-              onPress={() => {
-                setMenuOpen(false);
-                router.push("/login");
-              }}
-            >
-              <ThemedText style={[styles.menuText, styles.logoutText]}>Log out</ThemedText>
-            </Pressable>
-          </View>
+
+            {!editOpen ? (
+              <>
+                <View style={styles.menuHeader}>
+                  <Image
+                    source={avatarSource}
+                    style={styles.menuHeaderAvatar}
+                    contentFit="cover"
+                    onError={() => {
+                      if (avatarCanError) setPhotoBroken(true);
+                    }}
+                  />
+                  <View style={styles.menuHeaderTextWrap}>
+                    <ThemedText style={styles.menuHeaderName}>{username}</ThemedText>
+                    <Pressable onPress={openEdit} style={({ pressed }) => [styles.editTextBtn, pressed && styles.editTextBtnPressed]}>
+                      <ThemedText style={styles.editTextBtnText}>Edit Profile</ThemedText>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.menuDivider} />
+
+                <Pressable
+                  style={({ pressed }) => [styles.menuItem, styles.logoutItem, pressed && styles.menuItemPressed]}
+                  onPress={async () => {
+                    closeMenu();
+                    await signOut(auth);
+                    router.replace("/login");
+                  }}
+                >
+                  <View style={styles.menuItemLeft}>
+                    <View style={[styles.menuIconBadge, styles.logoutBadge]}>
+                      <Ionicons name="log-out-outline" size={MENU_ICON_SIZE} color="#b91c1c" />
+                    </View>
+                    <ThemedText style={[styles.menuText, styles.logoutText]}>Log out</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.menuChevron, styles.logoutText]}>›</ThemedText>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.editScrollPad}>
+                  <View style={styles.sectionCard}>
+                    <ThemedText style={styles.sectionTitle}>Account</ThemedText>
+
+                    <View style={styles.field}>
+                      <ThemedText style={styles.fieldLabel}>Username</ThemedText>
+                      <View style={styles.inputWrap}>
+                        <TextInput
+                          value={editName}
+                          onChangeText={(t) => {
+                            setEditName(t);
+                            setSaveNotice("");
+                          }}
+                          placeholder="Enter username"
+                          placeholderTextColor="#9ca3af"
+                          style={styles.input}
+                          autoCapitalize="words"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.field}>
+                      <ThemedText style={styles.fieldLabel}>Email</ThemedText>
+                      <View style={styles.inputWrap}>
+                        <TextInput
+                          value={editEmail}
+                          onChangeText={(t) => {
+                            setEditEmail(t);
+                            setSaveNotice("");
+                          }}
+                          placeholder="Enter email"
+                          placeholderTextColor="#9ca3af"
+                          style={styles.input}
+                          autoCapitalize="none"
+                          keyboardType="email-address"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.field}>
+                      <ThemedText style={styles.fieldLabel}>Password</ThemedText>
+                      <View style={styles.inputWrap}>
+                        <TextInput
+                          value={editPassword}
+                          onChangeText={(t) => {
+                            setEditPassword(t);
+                            setSaveNotice("");
+                          }}
+                          placeholder="New password (min 6)"
+                          placeholderTextColor="#9ca3af"
+                          style={styles.input}
+                          secureTextEntry
+                        />
+                      </View>
+                      {!passwordReady && (
+                        <ThemedText style={[styles.noticeText, styles.noticeBad, styles.passwordHint]}>
+                          Password must be at least 6 characters.
+                        </ThemedText>
+                      )}
+                    </View>
+
+                    <View style={styles.field}>
+                      <ThemedText style={styles.fieldLabel}>Profile picture</ThemedText>
+
+                      <View style={styles.avatarPickerTop}>
+                        <Image source={editAvatarSource} style={styles.editAvatarPreview} contentFit="cover" />
+                        <View style={styles.avatarPickerMeta}>
+                          <ThemedText style={styles.avatarPickerTitle}>Choose an avatar</ThemedText>
+                          <ThemedText style={styles.avatarPickerSub}>Pick one below and save changes.</ThemedText>
+                        </View>
+                      </View>
+
+                      <View style={styles.avatarGrid}>
+                        {AVATAR_CHOICES.map((a) => {
+                          const selected = (editPhoto || "") === a.key;
+                          return (
+                            <Pressable
+                              key={a.key}
+                              onPress={() => {
+                                setEditPhoto(a.key);
+                                setSaveNotice("");
+                              }}
+                              style={({ pressed }) => [styles.avatarOption, selected && styles.avatarOptionSelected, pressed && styles.avatarOptionPressed]}
+                            >
+                              <Image source={a.src} style={styles.avatarOptionImg} contentFit="cover" />
+                              <ThemedText style={styles.avatarOptionLabel}>{a.label}</ThemedText>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.primaryBtn,
+                        (saving || !auth.currentUser || !hasChanges) && styles.primaryBtnDisabled,
+                        pressed && !saving && hasChanges && styles.primaryBtnPressed,
+                      ]}
+                      disabled={saving || !auth.currentUser || !hasChanges}
+                      onPress={performSave}
+                    >
+                      <ThemedText style={styles.primaryBtnText}>{saving ? "SAVING..." : "SAVE CHANGES"}</ThemedText>
+                    </Pressable>
+
+                    {!!saveNotice && (
+                      <ThemedText style={[styles.noticeText, saveOk ? styles.noticeOk : styles.noticeBad]}>
+                        {saveNotice}
+                      </ThemedText>
+                    )}
+
+                    {!saveNotice && !hasChanges && (
+                      <ThemedText style={[styles.noticeText, styles.noticeMuted]}>
+                        No changes yet.
+                      </ThemedText>
+                    )}
+                  </View>
+                </ScrollView>
+              </>
+            )}
+          </Animated.View>
         </>
       )}
     </ThemedView>
@@ -335,9 +760,15 @@ export default function Menu() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "white" },
-  topBar: { paddingTop: 28, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topBar: {
+    paddingTop: 28,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   userWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
-  userAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#e5e7eb" },
+  userAvatar: { width: 28, height: 28, borderRadius: 8, backgroundColor: "#e5e7eb" },
   userName: { fontSize: 14, color: "#111" },
   menuBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", alignSelf: "flex-end" },
   menuIcon: { fontSize: 20, color: "#000" },
@@ -352,23 +783,37 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 }
+    shadowOffset: { width: 0, height: 4 },
   },
-  notifyBtn: { position: "absolute", top: 12, right: 12, width: 28, height: 28, alignItems: "center", justifyContent: "center" },
+  notifyBtn: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   notifyIcon: { color: "white", fontSize: 18 },
   quoteTitle: { color: "white", textAlign: "center", marginBottom: 8, fontSize: 18, paddingRight: 28 },
   quoteText: { color: "white", textAlign: "center", lineHeight: 22, marginTop: 6, marginBottom: 14 },
   quoteActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   circleBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "white", alignItems: "center", justifyContent: "center" },
   circleIcon: { color: "#111", fontSize: 16 },
-  generateBtn: { marginLeft: "auto", backgroundColor: "white", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20 },
+  generateBtn: {
+    marginLeft: "auto",
+    backgroundColor: "white",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
   generateText: { color: "#111", fontSize: 12, letterSpacing: 0.5 },
 
   feedWrap: { marginTop: 16, gap: 10 },
   post: { backgroundColor: "white", borderRadius: 14, borderWidth: 1, borderColor: "#e5e7eb", padding: 12 },
   postHead: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#0a0a0a" },
-  avatarImg: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#e5e7eb" },
+  avatarImg: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#e5e7eb" },
   nameWrap: { marginLeft: 10, flex: 1 },
   name: { color: "#6b7280", fontSize: 12 },
   moreBtn: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
@@ -393,7 +838,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     borderWidth: 1,
-    borderColor: "#e5e7eb"
+    borderColor: "#e5e7eb",
   },
   fabPlus: { fontSize: 28, lineHeight: 28, color: "#111" },
 
@@ -408,52 +853,290 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
   },
   navBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   navIcon: { color: "white", fontSize: 18 },
 
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.35)" },
-  menuCaret: {
-    position: "absolute",
-    top: 68,
-    right: 28,
-    width: 14,
-    height: 14,
-    backgroundColor: "white",
-    transform: [{ rotate: "45deg" }],
-    borderLeftWidth: 1,
-    borderTopWidth: 1,
-    borderColor: "#e5e7eb",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 }
-  },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
+  dismissArea: { position: "absolute", top: 0, bottom: 0, left: 0 },
+  menuCaret: { position: "absolute", opacity: 0 },
+
   menuSheet: {
     position: "absolute",
-    top: 72,
-    right: 12,
+    top: 0,
+    bottom: 0,
+    right: 0,
     backgroundColor: "white",
-    borderRadius: 18,
+    borderTopLeftRadius: 22,
+    borderBottomLeftRadius: 22,
+    borderLeftWidth: 1,
+    borderColor: "#e5e7eb",
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    shadowOffset: { width: -8, height: 0 },
+  },
+
+  menuTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 10,
+  },
+  menuTopLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  menuTitle: { fontSize: 14, color: "#111", letterSpacing: 0.4 },
+
+  backBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: "#f3f4f6",
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    paddingVertical: 10,
-    width: 260,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 }
+    alignItems: "center",
+    justifyContent: "center",
   },
-  menuHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10 },
-  menuHeaderAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#e5e7eb" },
-  menuHeaderTextWrap: { marginLeft: 10, flex: 1 },
-  menuHeaderName: { fontSize: 14, color: "#111" },
-  menuHeaderSub: { fontSize: 12, color: "#6b7280" },
-  menuDivider: { height: 1, backgroundColor: "#f1f5f9", marginVertical: 6, marginHorizontal: 8 },
+  backIcon: { fontSize: 20, marginTop: -2, color: "#111" },
 
-  menuItem: { paddingVertical: 14, paddingHorizontal: 14, borderRadius: 12, marginHorizontal: 6 },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  closeIcon: { fontSize: 16, color: "#111" },
+
+  menuHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 2,
+    paddingVertical: 10,
+  },
+  menuHeaderAvatar: { width: 44, height: 44, borderRadius: 12, backgroundColor: "#e5e7eb" },
+  menuHeaderTextWrap: { marginLeft: 12, flex: 1 },
+  menuHeaderName: { fontSize: 16, color: "#111" },
+
+  editTextBtn: { marginTop: 6, alignSelf: "flex-start" },
+  editTextBtnPressed: { opacity: 0.75 },
+  editTextBtnText: { fontSize: 12, color: "#111", textDecorationLine: "underline" },
+
+  editPill: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  editPillPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+  editPillText: { fontSize: 12, color: "#111" },
+
+  menuDivider: { height: 1, backgroundColor: "rgba(0,0,0,0.06)", marginVertical: 10 },
+
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "white",
+    marginBottom: 10,
+  },
+  menuItemPressed: { transform: [{ scale: 0.99 }], opacity: 0.92 },
+
+  menuItemLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  menuIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   menuText: { fontSize: 14, color: "#111" },
+  menuChevron: { fontSize: 18, color: "#9ca3af", marginTop: -1 },
+
   logoutItem: { marginTop: 2 },
-  logoutText: { color: "#b91c1c" }
+  logoutText: { color: "#b91c1c" },
+  logoutBadge: { backgroundColor: "#fef2f2", borderColor: "#fecaca" },
+
+  editScrollPad: { paddingBottom: 30 },
+  sectionCard: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: "white",
+    marginBottom: 10,
+  },
+  sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  sectionTitle: { fontSize: 13, color: "#111" },
+
+  smallBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  smallBtnPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+  smallBtnText: { fontSize: 12, color: "#111" },
+
+  uploadBtn: {
+    backgroundColor: "#0a0a0a",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  uploadBtnText: { color: "white", fontSize: 12, letterSpacing: 0.6 },
+
+  photoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "white",
+  },
+  photoRowPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+  editAvatar: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#e5e7eb" },
+  photoMeta: { flex: 1 },
+  photoTitle: { fontSize: 13, color: "#111" },
+  photoSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
+
+  field: { marginTop: 10 },
+  fieldLabel: { fontSize: 12, color: "#6b7280", marginBottom: 6 },
+  inputWrap: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 14,
+    backgroundColor: "white",
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  input: { fontSize: 14, color: "#111" },
+
+  avatarPickerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "white",
+  },
+  editAvatarPreview: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#e5e7eb" },
+  avatarPickerMeta: { flex: 1 },
+  avatarPickerTitle: { fontSize: 13, color: "#111" },
+  avatarPickerSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
+
+  avatarGrid: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  avatarOption: {
+    width: "47%",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "white",
+    padding: 10,
+    paddingRight: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  avatarOptionSelected: { borderColor: "#111", borderWidth: 2 },
+  avatarOptionPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+  avatarOptionImg: { width: 34, height: 34, borderRadius: 12, backgroundColor: "#e5e7eb" },
+  avatarOptionLabel: { fontSize: 12, color: "#111" },
+
+  primaryBtn: {
+    marginTop: 12,
+    backgroundColor: "#0a0a0a",
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryBtnInline: {
+    backgroundColor: "#0a0a0a",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 110,
+  },
+  primaryBtnPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+  primaryBtnDisabled: { opacity: 0.5 },
+  primaryBtnText: { color: "white", fontSize: 12, letterSpacing: 0.6 },
+
+  noticeText: { marginTop: 10, fontSize: 12, lineHeight: 18 },
+  noticeOk: { color: "#16a34a" },
+  noticeBad: { color: "#b91c1c" },
+  noticeMuted: { color: "#6b7280" },
+  passwordHint: { marginTop: 8 },
+
+  overlayWrap: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  overlayBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.35)" },
+  overlayCard: {
+    width: MENU_WIDTH - 28,
+    maxWidth: 320,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "white",
+    padding: 14,
+  },
+  overlayHeader: { flexDirection: "row", alignItems: "center" },
+  overlayIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  overlayTextWrap: { marginLeft: 10, flex: 1 },
+  overlayTitle: { fontSize: 14, color: "#111" },
+  overlaySub: { fontSize: 12, color: "#6b7280", marginTop: 4, lineHeight: 18 },
+  overlayActions: { marginTop: 12, flexDirection: "row", justifyContent: "flex-end" },
+
+  secondaryBtn: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "white",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryBtnPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+  secondaryBtnText: { fontSize: 12, color: "#111", letterSpacing: 0.6 },
 });

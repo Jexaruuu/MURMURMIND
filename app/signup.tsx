@@ -12,11 +12,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 export default function Signup() {
   const [name, setName] = useState("");
@@ -31,23 +29,7 @@ export default function Signup() {
   });
   const insets = useSafeAreaInsets();
 
-  const spinVal = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const spinAnim = Animated.timing(spinVal, {
-      toValue: 1,
-      duration: 6000,
-      easing: Easing.linear,
-      useNativeDriver: true,
-    });
-    Animated.loop(spinAnim, { iterations: -1, resetBeforeIteration: true }).start();
-  }, [spinVal]);
-
   if (!fontsLoaded) return null;
-
-  const spin = spinVal.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
 
   const prettyAuthError = (m: string) => {
     if (/auth\/invalid-email/i.test(m)) return "Invalid email.";
@@ -95,27 +77,41 @@ export default function Signup() {
 
   return (
     <ThemedView style={styles.container}>
-      <Image source={require("@/assets/images/murmurbg.png")} style={styles.bg} contentFit="cover" pointerEvents="none" />
+      <Image
+        source={require("@/assets/images/murmurbg.png")}
+        style={styles.bg}
+        contentFit="cover"
+        pointerEvents="none"
+      />
 
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <ThemedText style={styles.backText}>‹</ThemedText>
         </Pressable>
-        <Pressable style={[styles.signupPill, styles.signupPillHidden]} onPress={() => router.push("/login")}>
-          <ThemedText style={[styles.signupPillText, { fontFamily: "Poppins_500Medium" }]}>LOG IN</ThemedText>
+        <Pressable
+          style={[styles.signupPill, styles.signupPillHidden]}
+          onPress={() => router.push("/login")}
+        >
+          <ThemedText style={[styles.signupPillText, { fontFamily: "Poppins_500Medium" }]}>
+            LOG IN
+          </ThemedText>
         </Pressable>
       </View>
 
       <View style={styles.centerWrap}>
-        <AnimatedImage
-          source={require("@/assets/images/murmuricon.png")}
-          style={[styles.logo, { transform: [{ rotate: spin }] }]}
+        <Image
+          source={require("@/assets/images/murmurlogowhite.png")}
+          style={styles.logo}
         />
-        <ThemedText style={[styles.brand, { fontFamily: "Poppins_600SemiBold" }]}>Murmurmind</ThemedText>
+        <ThemedText style={[styles.brand, { fontFamily: "Poppins_600SemiBold" }]}>
+         
+        </ThemedText>
       </View>
 
       <View style={[styles.sheet, { paddingBottom: 24 + Math.max(insets.bottom, 16) }]}>
-        <ThemedText style={[styles.sheetTitle, { fontFamily: "Poppins_500Medium" }]}>Create Account</ThemedText>
+        <ThemedText style={[styles.sheetTitle, { fontFamily: "Poppins_500Medium" }]}>
+          Create Account
+        </ThemedText>
 
         <View style={styles.form}>
           <TextInput
@@ -151,7 +147,7 @@ export default function Signup() {
 
           <Pressable onPress={onSignup} style={styles.loginBtnWrap}>
             <LinearGradient
-              colors={["#595959", "#595959"]}
+              colors={["#000000", "#000000"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={[styles.loginBtn, submitting && { opacity: 0.7 }]}
@@ -176,15 +172,32 @@ export default function Signup() {
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: "center", justifyContent: "center" },
   bg: { ...StyleSheet.absoluteFillObject },
-  header: { position: "absolute", top: 0, left: 0, right: 0, height: 72, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },
+  header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+  },
   backBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   backText: { fontSize: 28, color: "#111" },
-  signupPill: { paddingHorizontal: 16, height: 32, borderRadius: 16, backgroundColor: "#111", alignItems: "center", justifyContent: "center" },
+  signupPill: {
+    paddingHorizontal: 16,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   signupPillText: { color: "white", fontSize: 12, letterSpacing: 0.5 },
   signupPillHidden: { opacity: 0, width: 0, height: 0, paddingHorizontal: 0 },
 
   centerWrap: { alignItems: "center", justifyContent: "center", gap: 12, marginTop: -40 },
-  logo: { width: 250, height: 250, borderRadius: 9999, marginBottom: -70 },
+  logo: { width: 450, height: 450, borderRadius: 9999, marginBottom: -125 },
   brand: { color: "white", letterSpacing: 0.5, marginBottom: 335, fontSize: 30 },
 
   sheet: {
@@ -198,7 +211,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
     alignItems: "center",
-    gap: 12
+    gap: 12,
   },
   sheetTitle: { fontSize: 16, marginBottom: 6, color: "#000" },
 
@@ -210,7 +223,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb"
+    borderColor: "#e5e7eb",
   },
 
   loginBtnWrap: { width: "100%", borderRadius: 18, overflow: "hidden" },
@@ -222,7 +235,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#efefef",
     borderRadius: 18,
     paddingVertical: 14,
-    alignItems: "center"
+    alignItems: "center",
   },
-  secondaryText: { color: "#111", fontSize: 14, letterSpacing: 0.5 }
+  secondaryText: { color: "#111", fontSize: 14, letterSpacing: 0.5 },
 });

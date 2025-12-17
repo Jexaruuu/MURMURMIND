@@ -8,11 +8,9 @@ import {
 import { useFonts } from "expo-font";
 import { Image } from "expo-image";
 import { Link, router } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -24,45 +22,39 @@ export default function Login() {
   });
   const insets = useSafeAreaInsets();
 
-  const spinVal = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const spinAnim = Animated.timing(spinVal, {
-      toValue: 1,
-      duration: 6000,
-      easing: Easing.linear,
-      useNativeDriver: true,
-    });
-    Animated.loop(spinAnim, { iterations: -1, resetBeforeIteration: true }).start();
-  }, [spinVal]);
-
   if (!fontsLoaded) return null;
-
-  const spin = spinVal.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
 
   return (
     <ThemedView style={styles.container}>
-      <Image source={require("@/assets/images/murmurbg.png")} style={styles.bg} contentFit="cover" pointerEvents="none" />
+      <Image
+        source={require("@/assets/images/murmurbg.png")}
+        style={styles.bg}
+        contentFit="cover"
+        pointerEvents="none"
+      />
 
       <View style={styles.centerWrap}>
-        <AnimatedImage
-          source={require("@/assets/images/murmuricon.png")}
-          style={[styles.logo, { transform: [{ rotate: spin }] }]}
+        <Image
+          source={require("@/assets/images/murmurlogowhite.png")}
+          style={styles.logo}
         />
-        <ThemedText type="title" style={[styles.brand, styles.font400]}>Murmurmind</ThemedText>
+        <ThemedText type="title" style={[styles.brand, styles.font400]}>
+        </ThemedText>
       </View>
 
       <View style={[styles.sheet, { paddingBottom: 24 + Math.max(insets.bottom, 16) }]}>
         <ThemedText style={[styles.sheetTitle, styles.font500]}>Get Started</ThemedText>
 
         <Pressable style={styles.loginBtn} onPress={() => router.push("/login")}>
-          <ThemedText type="defaultSemiBold" style={[styles.loginText, styles.font600]}>LOGIN</ThemedText>
+          <ThemedText type="defaultSemiBold" style={[styles.loginText, styles.font600]}>
+            LOGIN
+          </ThemedText>
         </Pressable>
 
         <Pressable style={styles.signupBtn} onPress={() => router.push("/signup")}>
-          <ThemedText type="defaultSemiBold" style={[styles.signupText, styles.font600]}>SIGNUP</ThemedText>
+          <ThemedText type="defaultSemiBold" style={[styles.signupText, styles.font600]}>
+            SIGNUP
+          </ThemedText>
         </Pressable>
       </View>
 
@@ -86,7 +78,9 @@ export default function Login() {
             style={[styles.input, styles.font400]}
           />
           <Pressable style={styles.btn} onPress={() => router.push("/login")}>
-            <ThemedText type="defaultSemiBold" style={[styles.btnText, styles.font600]}>Log in</ThemedText>
+            <ThemedText type="defaultSemiBold" style={[styles.btnText, styles.font600]}>
+              Log in
+            </ThemedText>
           </Pressable>
         </View>
         <ThemedText style={[styles.switchText, styles.font400]}>
@@ -101,7 +95,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, alignItems: "center", justifyContent: "center" },
   bg: { ...StyleSheet.absoluteFillObject },
   centerWrap: { alignItems: "center", justifyContent: "center", gap: 12, marginTop: -40 },
-  logo: { width: 250, height: 250, borderRadius: 9999, marginBottom: -70 },
+  logo: { width: 450, height: 450, borderRadius: 9999, marginBottom: -135 },
   brand: { color: "white", letterSpacing: 0.5, marginBottom: 335, fontSize: 30 },
 
   sheet: {
@@ -115,7 +109,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
     alignItems: "center",
-    gap: 12
+    gap: 12,
   },
   sheetTitle: { fontSize: 16, marginBottom: 6, color: "#000" },
 
@@ -124,16 +118,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#efefef",
     borderRadius: 18,
     paddingVertical: 14,
-    alignItems: "center"
+    alignItems: "center",
   },
   loginText: { color: "#111" },
 
   signupBtn: {
     width: "100%",
-    backgroundColor: "#595959",
+    backgroundColor: "#000000",
     borderRadius: 18,
     paddingVertical: 14,
-    alignItems: "center"
+    alignItems: "center",
   },
   signupText: { color: "white" },
 
@@ -145,7 +139,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb"
+    borderColor: "#e5e7eb",
   },
   btn: { backgroundColor: "#0ea5e9", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
   btnText: { color: "white" },
@@ -154,5 +148,5 @@ const styles = StyleSheet.create({
 
   font400: { fontFamily: "Poppins_400Regular" },
   font500: { fontFamily: "Poppins_500Medium" },
-  font600: { fontFamily: "Poppins_600SemiBold" }
+  font600: { fontFamily: "Poppins_600SemiBold" },
 });

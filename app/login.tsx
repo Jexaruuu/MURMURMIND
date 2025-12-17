@@ -11,11 +11,9 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -29,23 +27,7 @@ export default function Login() {
   });
   const insets = useSafeAreaInsets();
 
-  const spinVal = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const spinAnim = Animated.timing(spinVal, {
-      toValue: 1,
-      duration: 6000,
-      easing: Easing.linear,
-      useNativeDriver: true,
-    });
-    Animated.loop(spinAnim, { iterations: -1, resetBeforeIteration: true }).start();
-  }, [spinVal]);
-
   if (!fontsLoaded) return null;
-
-  const spin = spinVal.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
 
   const prettyAuthError = (m: string) => {
     if (/auth\/invalid-email/i.test(m)) return "Invalid email.";
@@ -91,11 +73,8 @@ export default function Login() {
       </View>
 
       <View style={styles.centerWrap}>
-        <AnimatedImage
-          source={require("@/assets/images/murmuricon.png")}
-          style={[styles.logo, { transform: [{ rotate: spin }] }]}
-        />
-        <ThemedText style={[styles.brand, { fontFamily: "Poppins_600SemiBold" }]}>Murmurmind</ThemedText>
+        <Image source={require("@/assets/images/murmurlogowhite.png")} style={styles.logo} />
+        <ThemedText style={[styles.brand, { fontFamily: "Poppins_600SemiBold" }]}></ThemedText>
       </View>
 
       <View style={[styles.sheet, { paddingBottom: 24 + Math.max(insets.bottom, 16) }]}>
@@ -128,7 +107,7 @@ export default function Login() {
 
           <Pressable onPress={onLogin} style={styles.loginBtnWrap}>
             <LinearGradient
-              colors={["#595959", "#595959"]}
+              colors={["#000000", "#000000"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={[styles.loginBtn, submitting && { opacity: 0.7 }]}
@@ -174,7 +153,7 @@ const styles = StyleSheet.create({
   signupPillText: { color: "white", fontSize: 12, letterSpacing: 0.5 },
 
   centerWrap: { alignItems: "center", justifyContent: "center", gap: 12, marginTop: -40 },
-  logo: { width: 250, height: 250, borderRadius: 9999, marginBottom: -70 },
+  logo: { width: 450, height: 450, borderRadius: 9999, marginBottom: -135 },
   brand: { color: "white", letterSpacing: 0.5, marginBottom: 335, fontSize: 30 },
 
   sheet: {
