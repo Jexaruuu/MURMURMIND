@@ -1,7 +1,9 @@
+import HomeNavigation from "@/components/homenavigation";
 import Navigation from "@/components/navigation";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { auth, db } from "@/firebase";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -9,7 +11,7 @@ import { StatusBar } from "expo-status-bar";
 import { onAuthStateChanged } from "firebase/auth";
 import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 
 const tiles = [
@@ -124,6 +126,7 @@ const QUOTES = [
 
 const SHOW_SOCIAL = false;
 const SHOW_BOTTOM_NAV = false;
+const SHOW_FAB = false;
 
 const fallbackAvatar = require("@/assets/images/murmurblack.png");
 
@@ -209,6 +212,7 @@ type ReplyItem = {
 export default function Menu() {
   const [qIndex, setQIndex] = useState(0);
   const quote = useMemo(() => QUOTES[qIndex % QUOTES.length], [qIndex]);
+  const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [myUid, setMyUid] = useState<string | null>(auth.currentUser?.uid ? String(auth.currentUser.uid) : null);
@@ -232,6 +236,11 @@ export default function Menu() {
   const [sendingReply, setSendingReply] = useState(false);
 
   const [nowMs, setNowMs] = useState(Date.now());
+
+  const [topNavH, setTopNavH] = useState(0);
+  const navAnim = useRef(new Animated.Value(0)).current;
+  const navHiddenRef = useRef(false);
+  const lastScrollY = useRef(0);
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
@@ -459,7 +468,7 @@ export default function Menu() {
 
   const headerSubtitle = useMemo(() => {
     const count = posts.length;
-    if (count === 0) return "No posts yet. Tap + to write your first thought.";
+    if (count === 0) return "No posts yet. Tap Post to write your first thought.";
     if (count === 1) return "1 post in your feed";
     return `${count} posts in your feed`;
   }, [posts.length]);
@@ -573,31 +582,29 @@ export default function Menu() {
   };
 
   const whenLabel = (ms: number | null) => {
-  if (!ms) return "";
-  let diff = nowMs - ms;
-  if (diff < 0) diff = 0;
+    if (!ms) return "";
+    let diff = nowMs - ms;
+    if (diff < 0) diff = 0;
 
-  const sRaw = Math.floor(diff / 1000);
-  const s = Math.max(1, sRaw);
-  if (s < 60) return `${s}s`;
+    const sRaw = Math.floor(diff / 1000);
+    const s = Math.max(1, sRaw);
+    if (s < 60) return `${s}s`;
 
-  const m = Math.floor(sRaw / 60);
-  if (m < 60) return `${m}mi`;
+    const m = Math.floor(sRaw / 60);
+    if (m < 60) return `${m}mi`;
 
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
 
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d`;
+    const d = Math.floor(h / 24);
+    if (d < 7) return `${d}d`;
 
-  const w = Math.floor(d / 7);
-  if (w < 52) return `${w}w`;
+    const w = Math.floor(d / 7);
+    if (w < 52) return `${w}w`;
 
-  const y = Math.floor(w / 52);
-  return `${y}y`;
-};
-
-
+    const y = Math.floor(w / 52);
+    return `${y}y`;
+  };
 
   const replyTree = useMemo(() => {
     const byParent: Record<string, ReplyItem[]> = {};
@@ -686,13 +693,67 @@ export default function Menu() {
     return null;
   };
 
+  const setNavHidden = (hidden: boolean) => {
+    if (navHiddenRef.current === hidden) return;
+    navHiddenRef.current = hidden;
+    Animated.timing(navAnim, {
+      toValue: hidden ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const onFeedScroll = (e: any) => {
+    const y = Math.max(0, Number(e?.nativeEvent?.contentOffset?.y || 0));
+    const dy = y - lastScrollY.current;
+
+    if (y <= 0) {
+      setNavHidden(false);
+      lastScrollY.current = y;
+      return;
+    }
+
+    if (Math.abs(dy) >= 6) {
+      if (dy > 0) setNavHidden(true);
+      else setNavHidden(false);
+      lastScrollY.current = y;
+    }
+  };
+
+  const navTranslateY = navAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -(topNavH ? topNavH + 10 : 110)],
+  });
+
+  const navOpacity = navAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+
   return (
     <ThemedView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" backgroundColor="#000" translucent />
 
-      <Navigation />
+      <View pointerEvents="none" style={[styles.statusBg, { height: insets.top }]} />
 
-      <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+      <Animated.View
+        style={[styles.topNavWrap, { transform: [{ translateY: navTranslateY }], opacity: navOpacity }]}
+        pointerEvents={navHiddenRef.current ? "none" : "auto"}
+        onLayout={(e) => {
+          const h = Math.max(0, Math.floor(e.nativeEvent.layout.height));
+          if (h && h !== topNavH) setTopNavH(h);
+        }}
+      >
+        <Navigation />
+        <View style={[styles.statusBg, { height: insets.top }]} />
+      </Animated.View>
+
+      <ScrollView
+        contentContainerStyle={[styles.scrollPad, { paddingTop: (topNavH || 0) + 10 }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={onFeedScroll}
+        scrollEventThrottle={16}
+      >
         <View style={styles.hero}>
           <View style={styles.heroTop}>
             <View style={styles.heroLeft}>
@@ -732,7 +793,7 @@ export default function Menu() {
                 </View>
               </View>
               <ThemedText style={styles.emptyTitle}>No posts yet</ThemedText>
-              <ThemedText style={styles.emptyText}>Tap the + button to write your first thought.</ThemedText>
+              <ThemedText style={styles.emptyText}>Tap Post to write your first thought.</ThemedText>
             </View>
           ) : (
             posts.map((p) => {
@@ -756,14 +817,13 @@ export default function Menu() {
                       </View>
                     </View>
 
-                   {isMe ? (
-  <Pressable style={({ pressed }) => [styles.moreBtn, pressed && styles.pressed]} onPress={() => openActionsFor(p)}>
-    <ThemedText style={styles.moreIcon}>⋯</ThemedText>
-  </Pressable>
-) : (
-  <View style={{ width: 34, height: 34 }} />
-)}
-
+                    {isMe ? (
+                      <Pressable style={({ pressed }) => [styles.moreBtn, pressed && styles.pressed]} onPress={() => openActionsFor(p)}>
+                        <ThemedText style={styles.moreIcon}>⋯</ThemedText>
+                      </Pressable>
+                    ) : (
+                      <View style={{ width: 34, height: 34 }} />
+                    )}
                   </View>
 
                   {!!p.text.trim() && <ThemedText style={styles.postText}>{p.text}</ThemedText>}
@@ -819,9 +879,11 @@ export default function Menu() {
         </View>
       </ScrollView>
 
-      <Pressable style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]} onPress={() => router.push("/compose")}>
-        <ThemedText style={styles.fabPlus}>＋</ThemedText>
-      </Pressable>
+      {SHOW_FAB && (
+        <Pressable style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]} onPress={() => router.push("/compose")}>
+          <ThemedText style={styles.fabPlus}>＋</ThemedText>
+        </Pressable>
+      )}
 
       {SHOW_BOTTOM_NAV && (
         <View style={styles.bottomBar}>
@@ -833,6 +895,8 @@ export default function Menu() {
           </Pressable>
         </View>
       )}
+
+      <HomeNavigation />
 
       <Modal transparent visible={actionOpen} animationType="fade" onRequestClose={closeActions} statusBarTranslucent presentationStyle="overFullScreen">
         <View style={styles.actionWrap}>
@@ -902,7 +966,25 @@ export default function Menu() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "white" },
-  scrollPad: { paddingHorizontal: 12, paddingBottom: 170 },
+
+  statusBg: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#000",
+    zIndex: 200,
+  },
+
+  topNavWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    zIndex: 50,
+  },
+
+  scrollPad: { paddingHorizontal: 12, paddingBottom: 210 },
 
   pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
 
