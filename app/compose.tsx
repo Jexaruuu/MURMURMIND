@@ -27,10 +27,6 @@ export default function Compose() {
   const progress = useMemo(() => Math.min(1, text.length / max), [text.length]);
   const remaining = max - text.length;
 
-  const addTag = (t: string) => {
-    setText((prev) => (prev ? prev + " " + t : t));
-  };
-
   const submitPost = async () => {
     if (posting) return;
 
@@ -138,13 +134,6 @@ export default function Compose() {
             </View>
 
             <View style={styles.actions}>
-              <Pressable style={({ pressed }) => [styles.toolBtn, pressed && styles.toolBtnPressed]}>
-                <ThemedText style={styles.toolIcon}>📎</ThemedText>
-              </Pressable>
-              <Pressable style={({ pressed }) => [styles.toolBtn, pressed && styles.toolBtnPressed]}>
-                <ThemedText style={styles.toolIcon}>🙂</ThemedText>
-              </Pressable>
-
               <View style={{ flex: 1 }} />
 
               <Pressable
@@ -157,34 +146,6 @@ export default function Compose() {
                 onPress={submitPost}
               >
                 <ThemedText style={styles.postLbl}>{posting ? "POSTING..." : "POST"}</ThemedText>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.tagsCard}>
-            <View style={styles.tagsHead}>
-              <ThemedText style={styles.sectionTitle}>Quick tags</ThemedText>
-              <ThemedText style={styles.sectionHint}>Tap to add</ThemedText>
-            </View>
-
-            <View style={styles.chipsRow}>
-              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Inspiration")}>
-                <ThemedText style={styles.chipText}>#Inspiration</ThemedText>
-              </Pressable>
-              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Grateful")}>
-                <ThemedText style={styles.chipText}>#Grateful</ThemedText>
-              </Pressable>
-              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Win")}>
-                <ThemedText style={styles.chipText}>#Win</ThemedText>
-              </Pressable>
-              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Question")}>
-                <ThemedText style={styles.chipText}>#Question</ThemedText>
-              </Pressable>
-              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Mindset")}>
-                <ThemedText style={styles.chipText}>#Mindset</ThemedText>
-              </Pressable>
-              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Goals")}>
-                <ThemedText style={styles.chipText}>#Goals</ThemedText>
               </Pressable>
             </View>
           </View>
@@ -311,23 +272,6 @@ const styles = StyleSheet.create({
 
   actions: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
 
-  toolBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    backgroundColor: "white",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  toolBtnPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
-  toolIcon: { color: "#111", fontSize: 16 },
-
   countPlain: { fontSize: 12, color: "#6b7280" },
   countOver: { color: "#b91c1c", fontWeight: "600" },
 
@@ -346,31 +290,6 @@ const styles = StyleSheet.create({
 
   postLbl: { color: "white", fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase" },
   postBtnDisabled: { backgroundColor: "#9ca3af", borderColor: "#9ca3af" },
-
-  tagsCard: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    padding: 12,
-  },
-  tagsHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 },
-  sectionTitle: { fontSize: 12, color: "#111", letterSpacing: 0.3 },
-  sectionHint: { fontSize: 12, color: "#6b7280" },
-
-  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    height: 32,
-    borderRadius: 999,
-    backgroundColor: "white",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chipPressed: { transform: [{ scale: 0.99 }], opacity: 0.92 },
-  chipText: { fontSize: 12, color: "#111" },
 
   tipCard: {
     flexDirection: "row",

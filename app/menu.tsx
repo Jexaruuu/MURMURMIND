@@ -2,6 +2,7 @@ import Navigation from "@/components/navigation";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { auth, db } from "@/firebase";
+
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -9,6 +10,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { SvgXml } from "react-native-svg";
 
 const tiles = [
   { label: "Home", href: "/" },
@@ -188,6 +190,9 @@ type PostItem = {
   username?: string | null;
   photoUrl?: string | null;
   createdAt?: number | null;
+  mediaType?: "image" | "drawing" | null;
+  mediaUrl?: string | null;
+  drawingSvg?: string | null;
 };
 
 type ReplyItem = {
@@ -330,9 +335,16 @@ export default function Menu() {
             username: typeof data?.username === "string" ? data.username : null,
             photoUrl: typeof data?.photoUrl === "string" ? data.photoUrl : null,
             createdAt: toMs(data?.createdAt) ?? toMs(data?.createdAtMs),
+            mediaType: data?.mediaType === "image" || data?.mediaType === "drawing" ? data.mediaType : null,
+            mediaUrl: typeof data?.mediaUrl === "string" ? data.mediaUrl : null,
+            drawingSvg: typeof data?.drawingSvg === "string" ? data.drawingSvg : null,
           };
         })
-        .filter((p) => p.text.trim().length > 0);
+        .filter((p) => {
+          const hasText = p.text.trim().length > 0;
+          const hasMedia = !!p.mediaType || !!p.mediaUrl || !!p.drawingSvg;
+          return hasText || hasMedia;
+        });
 
       setPosts(next);
       if (threadPostId && !next.some((p) => p.id === threadPostId)) {
@@ -561,29 +573,31 @@ export default function Menu() {
   };
 
   const whenLabel = (ms: number | null) => {
-    if (!ms) return "";
-    let diff = nowMs - ms;
-    if (diff < 0) diff = 0;
+  if (!ms) return "";
+  let diff = nowMs - ms;
+  if (diff < 0) diff = 0;
 
-    const s = Math.floor(diff / 1000);
-    if (s < 10) return "just now";
-    if (s < 60) return `${s}s`;
+  const sRaw = Math.floor(diff / 1000);
+  const s = Math.max(1, sRaw);
+  if (s < 60) return `${s}s`;
 
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}mi`;
+  const m = Math.floor(sRaw / 60);
+  if (m < 60) return `${m}mi`;
 
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
 
-    const d = Math.floor(h / 24);
-    if (d < 7) return `${d}d`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
 
-    const w = Math.floor(d / 7);
-    if (w < 52) return `${w}w`;
+  const w = Math.floor(d / 7);
+  if (w < 52) return `${w}w`;
 
-    const y = Math.floor(w / 52);
-    return `${y}y`;
-  };
+  const y = Math.floor(w / 52);
+  return `${y}y`;
+};
+
+
 
   const replyTree = useMemo(() => {
     const byParent: Record<string, ReplyItem[]> = {};
@@ -635,6 +649,41 @@ export default function Menu() {
         </View>
       );
     });
+  };
+
+  const mediaLabelFor = (p: PostItem) => {
+    if (p.mediaType === "image") return "Image";
+    if (p.mediaType === "drawing") return "Drawing";
+    return "Thought";
+  };
+
+  const renderPostMedia = (p: PostItem) => {
+    if (p.mediaType === "image" && p.mediaUrl) {
+      return (
+        <View style={styles.mediaBox}>
+          <Image source={{ uri: p.mediaUrl }} style={styles.mediaImg} contentFit="cover" />
+        </View>
+      );
+    }
+
+    if (p.mediaType === "drawing") {
+      if (p.drawingSvg) {
+        return (
+          <View style={styles.mediaBox}>
+            <SvgXml xml={p.drawingSvg} width="100%" height="100%" />
+          </View>
+        );
+      }
+      if (p.mediaUrl) {
+        return (
+          <View style={styles.mediaBox}>
+            <Image source={{ uri: p.mediaUrl }} style={styles.mediaImg} contentFit="contain" />
+          </View>
+        );
+      }
+    }
+
+    return null;
   };
 
   return (
@@ -707,12 +756,19 @@ export default function Menu() {
                       </View>
                     </View>
 
-                    <Pressable style={({ pressed }) => [styles.moreBtn, pressed && styles.pressed, !isMe && styles.moreBtnDisabled]} onPress={() => openActionsFor(p)} disabled={!isMe}>
-                      <ThemedText style={[styles.moreIcon, !isMe && styles.moreIconDisabled]}>⋯</ThemedText>
-                    </Pressable>
+                   {isMe ? (
+  <Pressable style={({ pressed }) => [styles.moreBtn, pressed && styles.pressed]} onPress={() => openActionsFor(p)}>
+    <ThemedText style={styles.moreIcon}>⋯</ThemedText>
+  </Pressable>
+) : (
+  <View style={{ width: 34, height: 34 }} />
+)}
+
                   </View>
 
-                  <ThemedText style={styles.postText}>{p.text}</ThemedText>
+                  {!!p.text.trim() && <ThemedText style={styles.postText}>{p.text}</ThemedText>}
+
+                  {renderPostMedia(p)}
 
                   <View style={styles.threadRow}>
                     <Pressable style={({ pressed }) => [styles.threadBtn, pressed && styles.pressed]} onPress={() => openReplyForPost(p.id, displayName)}>
@@ -726,7 +782,7 @@ export default function Menu() {
                     <View style={{ flex: 1 }} />
 
                     <View style={styles.pill}>
-                      <ThemedText style={styles.pillText}>Thought</ThemedText>
+                      <ThemedText style={styles.pillText}>{mediaLabelFor(p)}</ThemedText>
                     </View>
                   </View>
 
@@ -927,6 +983,17 @@ const styles = StyleSheet.create({
   moreIconDisabled: { color: "#6b7280" },
 
   postText: { marginTop: 10, fontSize: 14, color: "#111", lineHeight: 20 },
+
+  mediaBox: {
+    marginTop: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    overflow: "hidden",
+    backgroundColor: "#fff",
+    height: 210,
+  },
+  mediaImg: { width: "100%", height: "100%" },
 
   pill: {
     height: 26,

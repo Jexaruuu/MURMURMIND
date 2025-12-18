@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth, initializeAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAtRxFtutkVxhU7ngsGU_twwRsnryJqAOI",
@@ -9,7 +10,7 @@ const firebaseConfig = {
   projectId: "its411-barsana-project",
   storageBucket: "its411-barsana-project.firebasestorage.app",
   messagingSenderId: "999284187418",
-  appId: "1:999284187418:android:e6033845eee1488e024ca3"
+  appId: "1:999284187418:android:e6033845eee1488e024ca3",
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -26,3 +27,5 @@ export const auth = (() => {
 })();
 
 export const db = getFirestore(app);
+
+export const storage = getStorage(app);
