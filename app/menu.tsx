@@ -7,7 +7,7 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { onAuthStateChanged } from "firebase/auth";
 import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
 const tiles = [
@@ -135,6 +135,52 @@ const AVATAR_ASSETS: Record<string, any> = {
   [`${ASSET_PREFIX}murmurgreen`]: require("@/assets/images/murmurgreen.png"),
 };
 
+const ALIAS_ADJ = [
+  "Sunny",
+  "Bubbly",
+  "Chill",
+  "Cosmic",
+  "Silly",
+  "Brave",
+  "Witty",
+  "Gentle",
+  "Curious",
+  "Sparkly",
+  "Mischievous",
+  "Dreamy",
+  "Peppy",
+  "Goofy",
+  "Clever",
+  "Kind",
+  "Zippy",
+  "Cozy",
+  "Nimble",
+  "Happy",
+];
+
+const ALIAS_NOUN = [
+  "Panda",
+  "Otter",
+  "Fox",
+  "Koala",
+  "Cat",
+  "Dolphin",
+  "Bunny",
+  "Turtle",
+  "Hedgehog",
+  "Chick",
+  "Raccoon",
+  "Penguin",
+  "Tiger",
+  "Sloth",
+  "Llama",
+  "Bear",
+  "Sparrow",
+  "Pup",
+  "Kitten",
+  "Dragon",
+];
+
 type PostItem = {
   id: string;
   text: string;
@@ -162,6 +208,9 @@ export default function Menu() {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [myUid, setMyUid] = useState<string | null>(auth.currentUser?.uid ? String(auth.currentUser.uid) : null);
   const [myPhotoUrl, setMyPhotoUrl] = useState<string | null>(null);
+
+  const [userPhotoByUid, setUserPhotoByUid] = useState<Record<string, string | null>>({});
+  const userPhotoUnsubs = useRef<Record<string, () => void>>({});
 
   const [actionOpen, setActionOpen] = useState(false);
   const [actionPostId, setActionPostId] = useState<string | null>(null);
@@ -207,6 +256,40 @@ export default function Menu() {
       return v.seconds * 1000 + Math.floor(ns / 1_000_000);
     }
     return null;
+  };
+
+  const dayStamp = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${da}`;
+  }, []);
+
+  const hashStr = (s: string) => {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  };
+
+  const aliasForUid = (uidLike: string | null | undefined) => {
+    const uid = typeof uidLike === "string" ? uidLike.trim() : "";
+    if (!uid) return "Playful Guest";
+    const seed = hashStr(`${dayStamp}|${uid}`);
+    const a = ALIAS_ADJ[seed % ALIAS_ADJ.length];
+    const n = ALIAS_NOUN[Math.floor(seed / ALIAS_ADJ.length) % ALIAS_NOUN.length];
+    return `${a} ${n}`;
+  };
+
+  const handleForUid = (uidLike: string | null | undefined) => {
+    const uid = typeof uidLike === "string" ? uidLike.trim() : "";
+    if (!uid) return "";
+    const seed = hashStr(`${dayStamp}|${uid}|handle`);
+    const h = seed.toString(36).slice(0, 6).padEnd(6, "0");
+    return `@${h}`;
   };
 
   useEffect(() => {
@@ -296,6 +379,63 @@ export default function Menu() {
 
     return () => unsub();
   }, [threadPostId]);
+
+  useEffect(() => {
+    const wanted = new Set<string>();
+
+    for (const p of posts) {
+      const uid = typeof p.uid === "string" ? p.uid.trim() : "";
+      if (uid && uid !== (myUid || "")) wanted.add(uid);
+    }
+
+    for (const r of replies) {
+      const uid = typeof r.uid === "string" ? r.uid.trim() : "";
+      if (uid && uid !== (myUid || "")) wanted.add(uid);
+    }
+
+    for (const uid of wanted) {
+      if (userPhotoUnsubs.current[uid]) continue;
+
+      const unsub = onSnapshot(
+        doc(db, "users", uid),
+        (snap) => {
+          const data: any = snap.exists() ? snap.data() : null;
+          const next = typeof data?.photoUrl === "string" ? data.photoUrl : null;
+          setUserPhotoByUid((prev) => (prev[uid] === next ? prev : { ...prev, [uid]: next }));
+        },
+        () => {
+          setUserPhotoByUid((prev) => (prev[uid] === null ? prev : { ...prev, [uid]: null }));
+        }
+      );
+
+      userPhotoUnsubs.current[uid] = unsub;
+    }
+
+    for (const uid of Object.keys(userPhotoUnsubs.current)) {
+      if (wanted.has(uid)) continue;
+      try {
+        userPhotoUnsubs.current[uid]();
+      } catch {}
+      delete userPhotoUnsubs.current[uid];
+      setUserPhotoByUid((prev) => {
+        if (!(uid in prev)) return prev;
+        const next = { ...prev };
+        delete next[uid];
+        return next;
+      });
+    }
+  }, [posts, replies, myUid]);
+
+  useEffect(() => {
+    return () => {
+      for (const uid of Object.keys(userPhotoUnsubs.current)) {
+        try {
+          userPhotoUnsubs.current[uid]();
+        } catch {}
+      }
+      userPhotoUnsubs.current = {};
+    };
+  }, []);
 
   const quickName = useMemo(() => {
     const u = auth.currentUser;
@@ -430,7 +570,7 @@ export default function Menu() {
     if (s < 60) return `${s}s`;
 
     const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m`;
+    if (m < 60) return `${m}mi`;
 
     const h = Math.floor(m / 60);
     if (h < 24) return `${h}h`;
@@ -464,13 +604,17 @@ export default function Menu() {
     if (!kids.length) return null;
 
     return kids.map((r) => {
-      const name = (r.username || "").trim() || "Anonymous";
-      const uidShort = r.uid ? `@${String(r.uid).slice(0, 6)}` : "";
+      const name = aliasForUid(r.uid) || "Anonymous";
+      const uidShort = handleForUid(r.uid);
       const time = whenLabel(r.createdAt);
+
+      const isMe = !!myUid && (r.uid || "") === myUid;
+      const liveOtherPhoto = !isMe && r.uid ? userPhotoByUid[String(r.uid)] || null : null;
+      const bestPhoto = (isMe ? myPhotoUrl : null) || liveOtherPhoto || r.photoUrl || null;
 
       return (
         <View key={r.id} style={[styles.replyRow, depth > 0 && { marginLeft: Math.min(44, depth * 14) }]}>
-          <Image source={sourceFor(r.photoUrl)} style={styles.replyAvatar} contentFit="cover" />
+          <Image source={sourceFor(bestPhoto)} style={styles.replyAvatar} contentFit="cover" />
           <View style={styles.replyBody}>
             <View style={styles.replyHead}>
               <ThemedText style={styles.replyName} numberOfLines={1}>
@@ -535,7 +679,7 @@ export default function Menu() {
               <View style={styles.postHead}>
                 <Image source={sourceFor(myPhotoUrl || null)} style={styles.avatarImg} contentFit="cover" />
                 <View style={styles.nameWrap}>
-                  <ThemedText style={styles.name}>{auth.currentUser ? quickName : "Anonymous"}</ThemedText>
+                  <ThemedText style={styles.name}>{auth.currentUser ? aliasForUid(myUid) : "Playful Guest"}</ThemedText>
                 </View>
               </View>
               <ThemedText style={styles.emptyTitle}>No posts yet</ThemedText>
@@ -544,18 +688,21 @@ export default function Menu() {
           ) : (
             posts.map((p) => {
               const isMe = !!myUid && (p.uid || "") === myUid;
-              const bestPhoto = (isMe ? myPhotoUrl : null) || p.photoUrl || null;
+              const liveOtherPhoto = !isMe && p.uid ? userPhotoByUid[String(p.uid)] || null : null;
+              const bestPhoto = (isMe ? myPhotoUrl : null) || liveOtherPhoto || p.photoUrl || null;
               const isThreadOpen = threadPostId === p.id;
               const postTime = whenLabel(p.createdAt ?? null);
+              const displayName = aliasForUid(p.uid) || "Anonymous";
+              const handle = handleForUid(p.uid);
 
               return (
                 <View key={p.id} style={styles.post}>
                   <View style={styles.postHead}>
                     <Image source={sourceFor(bestPhoto)} style={styles.avatarImg} contentFit="cover" />
                     <View style={styles.nameWrap}>
-                      <ThemedText style={styles.name}>{(p.username || "").trim() || "Anonymous"}</ThemedText>
+                      <ThemedText style={styles.name}>{displayName}</ThemedText>
                       <View style={styles.handleRow}>
-                        {!!p.uid && <ThemedText style={styles.handle}>@{String(p.uid).slice(0, 6)}</ThemedText>}
+                        {!!handle && <ThemedText style={styles.handle}>{handle}</ThemedText>}
                         {!!postTime && <ThemedText style={styles.postTime}>{postTime}</ThemedText>}
                       </View>
                     </View>
@@ -568,7 +715,7 @@ export default function Menu() {
                   <ThemedText style={styles.postText}>{p.text}</ThemedText>
 
                   <View style={styles.threadRow}>
-                    <Pressable style={({ pressed }) => [styles.threadBtn, pressed && styles.pressed]} onPress={() => openReplyForPost(p.id, p.username)}>
+                    <Pressable style={({ pressed }) => [styles.threadBtn, pressed && styles.pressed]} onPress={() => openReplyForPost(p.id, displayName)}>
                       <ThemedText style={styles.threadBtnText}>Reply</ThemedText>
                     </Pressable>
 

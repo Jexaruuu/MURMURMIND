@@ -480,15 +480,7 @@ export default function ProfileMenuSheet({
                 </View>
 
                 <View style={styles.field}>
-                  <ThemedText style={styles.label}>Profile picture</ThemedText>
-
-                  <Pressable style={({ pressed }) => [styles.photoRow, pressed && styles.itemPressed]} onPress={pickImage}>
-                    <Image source={editAvatarSource} style={styles.editAvatar} contentFit="cover" />
-                    <View style={styles.photoMeta}>
-                      <ThemedText style={styles.photoTitle}>Upload from gallery</ThemedText>
-                      <ThemedText style={styles.photoSub}>Tap to pick an image.</ThemedText>
-                    </View>
-                  </Pressable>
+                  <ThemedText style={styles.label}>Choose Avatar</ThemedText>
 
                   <View style={styles.grid}>
                     {AVATAR_CHOICES.map((a) => {
