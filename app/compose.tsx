@@ -1,160 +1,387 @@
+import Navigation from "@/components/navigation";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { auth, db } from "@/firebase";
 import { router } from "expo-router";
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
+import { useMemo, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from "react-native";
 
 export default function Compose() {
   const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
+
   const max = 280;
   const over = text.length > max;
   const empty = text.trim().length === 0;
+
+  const progress = useMemo(() => Math.min(1, text.length / max), [text.length]);
+  const remaining = max - text.length;
 
   const addTag = (t: string) => {
     setText((prev) => (prev ? prev + " " + t : t));
   };
 
+  const submitPost = async () => {
+    if (posting) return;
+
+    const trimmed = text.trim();
+    if (!trimmed || over) return;
+
+    const u = auth.currentUser;
+    if (!u) {
+      router.replace("/login");
+      return;
+    }
+
+    setPosting(true);
+
+    try {
+      let username =
+        (typeof u.displayName === "string" && u.displayName.trim()) ||
+        (typeof u.email === "string" && u.email.includes("@") ? u.email.split("@")[0] : "") ||
+        "Guest";
+
+      let photoUrl =
+        typeof u.photoURL === "string" && u.photoURL.trim() ? u.photoURL.trim() : null;
+
+      const userSnap = await getDoc(doc(db, "users", u.uid));
+      if (userSnap.exists()) {
+        const d: any = userSnap.data();
+        const n = typeof d?.name === "string" ? d.name.trim() : "";
+        const p = typeof d?.photoUrl === "string" ? d.photoUrl.trim() : "";
+        if (n) username = n;
+        if (p) photoUrl = p;
+      }
+
+      await addDoc(collection(db, "posts"), {
+        uid: u.uid,
+        text: trimmed,
+        username,
+        photoUrl: photoUrl || null,
+        createdAt: serverTimestamp(),
+      });
+
+      setText("");
+      router.back();
+    } finally {
+      setPosting(false);
+    }
+  };
+
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]} onPress={() => router.back()}>
-          <ThemedText style={styles.backText}>‹</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.titleBlack}>Compose</ThemedText>
-        <Pressable style={[styles.postBtn, styles.headerPostHidden, (empty || over) && styles.postBtnDisabled]} onPress={() => router.back()}>
-          <ThemedText style={styles.postLbl}>Post</ThemedText>
-        </Pressable>
-      </View>
+      <StatusBar style="dark" />
 
-      <ScrollView contentContainerStyle={styles.contentPad} showsVerticalScrollIndicator={false}>
-        <View style={styles.card}>
-          <ThemedText type="title" style={styles.cardTitle}>What’s on your mind?</ThemedText>
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder="Write something inspiring..."
-            placeholderTextColor="#d1d5db"
-            style={styles.input}
-            multiline
-          />
-          <View style={styles.divider} />
-          <View style={styles.actions}>
-            <Pressable style={styles.circleBtn}>
-              <ThemedText style={styles.circleIcon}>📎</ThemedText>
-            </Pressable>
-            <Pressable style={styles.circleBtn}>
-              <ThemedText style={styles.circleIcon}>🙂</ThemedText>
-            </Pressable>
-            <View style={{ flex: 1 }} />
-            <ThemedText style={[styles.countPlain, over && styles.countOver]}>{text.length}/{max}</ThemedText>
-            <Pressable style={[styles.postBtn, (empty || over) && styles.postBtnDisabled]} onPress={() => router.back()}>
-              <ThemedText style={styles.postLbl}>Post</ThemedText>
-            </Pressable>
+      <Navigation />
+
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={styles.header}>
+          <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]} onPress={() => router.back()}>
+            <ThemedText style={styles.backText}>‹</ThemedText>
+          </Pressable>
+
+          <View style={styles.headerMid}>
+            <ThemedText type="title" style={styles.titleBlack}>
+              Compose
+            </ThemedText>
+            <ThemedText style={styles.subtitle}>Share a thought, a win, or a question.</ThemedText>
           </View>
+
+          <View style={styles.headerRightGap} />
         </View>
 
-        <ThemedText style={styles.sectionTitle}>Quick tags</ThemedText>
-        <View style={styles.chipsRow}>
-          <Pressable style={styles.chip} onPress={() => addTag("#Inspiration")}>
-            <ThemedText style={styles.chipText}>#Inspiration</ThemedText>
-          </Pressable>
-          <Pressable style={styles.chip} onPress={() => addTag("#Grateful")}>
-            <ThemedText style={styles.chipText}>#Grateful</ThemedText>
-          </Pressable>
-          <Pressable style={styles.chip} onPress={() => addTag("#Win")}>
-            <ThemedText style={styles.chipText}>#Win</ThemedText>
-          </Pressable>
-          <Pressable style={styles.chip} onPress={() => addTag("#Question")}>
-            <ThemedText style={styles.chipText}>#Question</ThemedText>
-          </Pressable>
-        </View>
-      </ScrollView>
+        <ScrollView contentContainerStyle={styles.contentPad} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={styles.card}>
+            <View style={styles.cardTop}>
+              <View style={styles.cardTitleWrap}>
+                <ThemedText style={styles.cardKicker}>New post</ThemedText>
+                <ThemedText type="title" style={styles.cardTitle}>
+                  What’s your thoughts?
+                </ThemedText>
+              </View>
+
+              <View style={styles.counterPill}>
+                <ThemedText style={[styles.counterText, over && styles.counterTextOver]}>
+                  {remaining >= 0 ? `${remaining} left` : `${Math.abs(remaining)} over`}
+                </ThemedText>
+              </View>
+            </View>
+
+            <View style={[styles.inputWrap, over && styles.inputWrapOver]}>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                placeholder="Write something inspiring..."
+                placeholderTextColor="#9ca3af"
+                style={styles.input}
+                multiline
+              />
+            </View>
+
+            <View style={styles.metaRow}>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+              </View>
+              <ThemedText style={[styles.countPlain, over && styles.countOver]}>
+                {text.length}/{max}
+              </ThemedText>
+            </View>
+
+            <View style={styles.actions}>
+              <Pressable style={({ pressed }) => [styles.toolBtn, pressed && styles.toolBtnPressed]}>
+                <ThemedText style={styles.toolIcon}>📎</ThemedText>
+              </Pressable>
+              <Pressable style={({ pressed }) => [styles.toolBtn, pressed && styles.toolBtnPressed]}>
+                <ThemedText style={styles.toolIcon}>🙂</ThemedText>
+              </Pressable>
+
+              <View style={{ flex: 1 }} />
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.postBtnBottom,
+                  (empty || over || posting) && styles.postBtnDisabled,
+                  pressed && !(empty || over || posting) && styles.postBtnPressed,
+                ]}
+                disabled={empty || over || posting}
+                onPress={submitPost}
+              >
+                <ThemedText style={styles.postLbl}>{posting ? "POSTING..." : "POST"}</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.tagsCard}>
+            <View style={styles.tagsHead}>
+              <ThemedText style={styles.sectionTitle}>Quick tags</ThemedText>
+              <ThemedText style={styles.sectionHint}>Tap to add</ThemedText>
+            </View>
+
+            <View style={styles.chipsRow}>
+              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Inspiration")}>
+                <ThemedText style={styles.chipText}>#Inspiration</ThemedText>
+              </Pressable>
+              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Grateful")}>
+                <ThemedText style={styles.chipText}>#Grateful</ThemedText>
+              </Pressable>
+              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Win")}>
+                <ThemedText style={styles.chipText}>#Win</ThemedText>
+              </Pressable>
+              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Question")}>
+                <ThemedText style={styles.chipText}>#Question</ThemedText>
+              </Pressable>
+              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Mindset")}>
+                <ThemedText style={styles.chipText}>#Mindset</ThemedText>
+              </Pressable>
+              <Pressable style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]} onPress={() => addTag("#Goals")}>
+                <ThemedText style={styles.chipText}>#Goals</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.tipCard}>
+            <View style={styles.tipDot} />
+            <ThemedText style={styles.tipText}>
+              Keep it short and clear. Posts that feel personal usually connect the most.
+            </ThemedText>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 28, backgroundColor: "white" },
-  header: { height: 56, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#f1f5f9" },
+  flex: { flex: 1 },
+
+  container: { flex: 1, backgroundColor: "white" },
+
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    backgroundColor: "white",
+  },
+
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "white",
     borderWidth: 1,
     borderColor: "#e5e7eb",
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 }
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
   },
-  backBtnPressed: { transform: [{ scale: 0.96 }], shadowOpacity: 0.02 },
+  backBtnPressed: { transform: [{ scale: 0.97 }], shadowOpacity: 0.02 },
   backText: { fontSize: 24, lineHeight: 24, color: "#111" },
+
+  headerMid: { flex: 1 },
   titleBlack: { color: "#111" },
-  postBtn: { paddingHorizontal: 16, height: 32, borderRadius: 10, backgroundColor: "#111", alignItems: "center", justifyContent: "center", marginLeft: 8 },
-  postLbl: { color: "white", fontSize: 12, letterSpacing: 0.5 },
+  subtitle: { marginTop: 2, fontSize: 12, color: "#6b7280" },
+
+  headerRightGap: { width: 42, height: 42 },
 
   contentPad: { paddingHorizontal: 16, paddingBottom: 24, gap: 12 },
 
   card: {
-    backgroundColor: "#0a0a0a",
-    borderRadius: 20,
-    padding: 16,
-    marginTop: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 }
-  },
-  cardTitle: { color: "white", textAlign: "center", marginBottom: 8, fontSize: 18, paddingRight: 28 },
-
-  input: {
-    minHeight: 180,
-    color: "white",
-    backgroundColor: "transparent",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    borderWidth: 0,
-    textAlignVertical: "top"
-  },
-
-  divider: { height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginTop: 8, marginBottom: 10 },
-
-  actions: { flexDirection: "row", alignItems: "center", gap: 10 },
-  circleBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "white", alignItems: "center", justifyContent: "center" },
-  circleIcon: { color: "#111", fontSize: 16 },
-
-  countPlain: { fontSize: 12, color: "#cbd5e1" },
-  countOver: { color: "#fca5a5", fontWeight: "600" },
-
-  sectionTitle: { marginTop: 6, marginBottom: 2, fontSize: 12, color: "#6b7280", letterSpacing: 0.3 },
-
-  chipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
     backgroundColor: "white",
-    borderRadius: 14,
+    borderRadius: 22,
+    padding: 14,
+    marginTop: 10,
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    padding: 10
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
   },
 
-  chip: {
+  cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  cardTitleWrap: { flex: 1 },
+  cardKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase" },
+  cardTitle: { color: "#111", marginTop: 4, fontSize: 18 },
+
+  counterPill: {
+    paddingHorizontal: 10,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  counterText: { fontSize: 12, color: "#111" },
+  counterTextOver: { color: "#b91c1c" },
+
+  inputWrap: {
+    marginTop: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "#fafafa",
     paddingHorizontal: 12,
-    height: 30,
-    borderRadius: 15,
+    paddingVertical: 10,
+  },
+  inputWrapOver: { borderColor: "#fecaca", backgroundColor: "#fff7f7" },
+
+  input: {
+    minHeight: 170,
+    color: "#111",
+    backgroundColor: "transparent",
+    borderRadius: 12,
+    padding: 0,
+    fontSize: 16,
+    borderWidth: 0,
+    textAlignVertical: "top",
+    lineHeight: 22,
+  },
+
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  progressTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "#eef2f7",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  progressFill: { height: 8, borderRadius: 999, backgroundColor: "#111" },
+
+  actions: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
+
+  toolBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     backgroundColor: "white",
     borderWidth: 1,
     borderColor: "#e5e7eb",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
   },
+  toolBtnPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  toolIcon: { color: "#111", fontSize: 16 },
+
+  countPlain: { fontSize: 12, color: "#6b7280" },
+  countOver: { color: "#b91c1c", fontWeight: "600" },
+
+  postBtnBottom: {
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: "#000000",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#000000",
+  },
+
+  postBtnPressed: { transform: [{ scale: 0.99 }], opacity: 0.92 },
+
+  postLbl: { color: "white", fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase" },
+  postBtnDisabled: { backgroundColor: "#9ca3af", borderColor: "#9ca3af" },
+
+  tagsCard: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    padding: 12,
+  },
+  tagsHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 },
+  sectionTitle: { fontSize: 12, color: "#111", letterSpacing: 0.3 },
+  sectionHint: { fontSize: 12, color: "#6b7280" },
+
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 999,
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chipPressed: { transform: [{ scale: 0.99 }], opacity: 0.92 },
   chipText: { fontSize: 12, color: "#111" },
 
-  postBtnDisabled: { backgroundColor: "#9ca3af" },
-  headerPostHidden: { opacity: 0, width: 0, paddingHorizontal: 0 }
+  tipCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  tipDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#111", marginTop: 4 },
+  tipText: { flex: 1, fontSize: 12, lineHeight: 18, color: "#475569" },
 });

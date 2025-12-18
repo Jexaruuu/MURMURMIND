@@ -2,16 +2,13 @@ import Navigation from "@/components/navigation";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { auth, db } from "@/firebase";
-import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { onAuthStateChanged, signOut, updateEmail, updatePassword, updateProfile } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { onAuthStateChanged } from "firebase/auth";
+import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
 const tiles = [
   { label: "Home", href: "/" },
@@ -123,419 +120,503 @@ const QUOTES = [
   `"Keep showing up."`,
 ];
 
-const FEED = [
-  "Start small, but start now.",
-  "Progress over perfection, always.",
-  "Your future self is watching—impress them.",
-  "One more try can change everything.",
-  "Discipline beats motivation on tough days.",
-  "You’re closer than you think—keep going.",
-];
-
 const SHOW_SOCIAL = false;
 const SHOW_BOTTOM_NAV = false;
 
 const fallbackAvatar = require("@/assets/images/murmurblack.png");
-const editPlaceholder = require("@/assets/images/murmurblack.png");
-
-const MENU_WIDTH = 260;
-const MENU_ICON_SIZE = 18;
 
 const ASSET_PREFIX = "asset:";
+const AVATAR_ASSETS: Record<string, any> = {
+  [`${ASSET_PREFIX}murmurblack`]: require("@/assets/images/murmurblack.png"),
+  [`${ASSET_PREFIX}murmuryellow`]: require("@/assets/images/murmuryellow.png"),
+  [`${ASSET_PREFIX}murmurblue`]: require("@/assets/images/murmurblue.png"),
+  [`${ASSET_PREFIX}murmurorange`]: require("@/assets/images/murmurorange.png"),
+  [`${ASSET_PREFIX}murmurred`]: require("@/assets/images/murmurred.png"),
+  [`${ASSET_PREFIX}murmurgreen`]: require("@/assets/images/murmurgreen.png"),
+};
 
-const AVATAR_CHOICES = [
-  { key: `${ASSET_PREFIX}murmurblack`, label: "Bla", src: require("@/assets/images/murmurblack.png") },
-  { key: `${ASSET_PREFIX}murmuryellow`, label: "Yel", src: require("@/assets/images/murmuryellow.png") },
-  { key: `${ASSET_PREFIX}murmurblue`, label: "Blu", src: require("@/assets/images/murmurblue.png") },
-  { key: `${ASSET_PREFIX}murmurorange`, label: "Ora", src: require("@/assets/images/murmurorange.png") },
-  { key: `${ASSET_PREFIX}murmurred`, label: "Red", src: require("@/assets/images/murmurred.png") },
-  { key: `${ASSET_PREFIX}murmurgreen`, label: "Gre", src: require("@/assets/images/murmurgreen.png") },
-];
+type PostItem = {
+  id: string;
+  text: string;
+  uid?: string | null;
+  username?: string | null;
+  photoUrl?: string | null;
+  createdAt?: number | null;
+};
 
-const AVATAR_ASSETS: Record<string, any> = AVATAR_CHOICES.reduce((acc: any, a) => {
-  acc[a.key] = a.src;
-  return acc;
-}, {});
+type ReplyItem = {
+  id: string;
+  postId: string;
+  parentId: string | null;
+  text: string;
+  uid: string | null;
+  username: string | null;
+  photoUrl: string | null;
+  createdAt: number | null;
+};
 
 export default function Menu() {
   const [qIndex, setQIndex] = useState(0);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
-
-  const [username, setUsername] = useState("Username");
-  const [userEmail, setUserEmail] = useState<string>("");
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [photoBroken, setPhotoBroken] = useState(false);
-
-  const [editOpen, setEditOpen] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editPassword, setEditPassword] = useState("");
-  const [editPhoto, setEditPhoto] = useState<string | null>(null);
-
-  const [baseName, setBaseName] = useState("");
-  const [baseEmail, setBaseEmail] = useState("");
-  const [basePhoto, setBasePhoto] = useState<string | null>(null);
-
-  const [saving, setSaving] = useState(false);
-
-  const [saveNotice, setSaveNotice] = useState("");
-  const [saveOk, setSaveOk] = useState(true);
-  const noticeTimer = useRef<any>(null);
-
   const quote = useMemo(() => QUOTES[qIndex % QUOTES.length], [qIndex]);
-  const insets = useSafeAreaInsets();
 
-  const menuX = useRef(new Animated.Value(MENU_WIDTH)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [myUid, setMyUid] = useState<string | null>(auth.currentUser?.uid ? String(auth.currentUser.uid) : null);
+  const [myPhotoUrl, setMyPhotoUrl] = useState<string | null>(null);
 
-  const assetFor = (v: string | null | undefined) => {
-    if (!v) return null;
-    if (typeof v !== "string") return null;
+  const [actionOpen, setActionOpen] = useState(false);
+  const [actionPostId, setActionPostId] = useState<string | null>(null);
+  const [actionPostUid, setActionPostUid] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const [threadPostId, setThreadPostId] = useState<string | null>(null);
+  const [replies, setReplies] = useState<ReplyItem[]>([]);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [replyingPostId, setReplyingPostId] = useState<string | null>(null);
+  const [replyParentId, setReplyParentId] = useState<string | null>(null);
+  const [replyParentName, setReplyParentName] = useState<string>("");
+  const [sendingReply, setSendingReply] = useState(false);
+
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const assetFor = (v: any) => {
+    if (!v || typeof v !== "string") return null;
     const k = v.trim();
     if (!k.startsWith(ASSET_PREFIX)) return null;
     return AVATAR_ASSETS[k] || null;
   };
 
-  const avatarAsset = assetFor(photoUrl);
-  const avatarSource = avatarAsset ? avatarAsset : photoUrl && !photoBroken ? { uri: photoUrl } : fallbackAvatar;
-  const avatarCanError = !avatarAsset && !!photoUrl;
-
-  const isHttpUrl = (v: string | null | undefined) => {
-    if (!v) return false;
-    const s = String(v).trim().toLowerCase();
-    return s.startsWith("http://") || s.startsWith("https://");
+  const sourceFor = (photoUrl: string | null | undefined) => {
+    const asset = assetFor(photoUrl);
+    if (asset) return asset;
+    const s = typeof photoUrl === "string" ? photoUrl.trim() : "";
+    if (!s) return fallbackAvatar;
+    return { uri: s };
   };
 
-  const friendlyError = (err: any) => {
-    const code = typeof err?.code === "string" ? err.code : "";
-    if (code.includes("permission-denied")) return "Firestore permission denied. Fix your Firestore Rules.";
-    if (code === "auth/requires-recent-login") return "Please log in again to change email/password.";
-    if (code === "auth/email-already-in-use") return "That email is already in use.";
-    if (code === "auth/invalid-email") return "Invalid email.";
-    if (code === "auth/weak-password") return "Password must be at least 6 characters.";
-    if (code === "auth/invalid-photo-url") return "Profile photo must be a valid URL. Avatars are saved in Firestore.";
-    return "Update failed. Please try again.";
-  };
-
-  const showNotice = (text: string, ok = true) => {
-    if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    setSaveOk(ok);
-    setSaveNotice(text);
-    noticeTimer.current = setTimeout(() => {
-      setSaveNotice("");
-    }, 2600);
+  const toMs = (v: any): number | null => {
+    if (typeof v === "number") return v;
+    if (v && typeof v.toMillis === "function") return v.toMillis();
+    if (v && typeof v.seconds === "number") {
+      const ns = typeof v.nanoseconds === "number" ? v.nanoseconds : 0;
+      return v.seconds * 1000 + Math.floor(ns / 1_000_000);
+    }
+    return null;
   };
 
   useEffect(() => {
-    return () => {
-      if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      setPhotoBroken(false);
-
-      if (!u) {
-        setUsername("Guest");
-        setUserEmail("");
-        setPhotoUrl(null);
-        return;
-      }
-
-      const quick = (u.displayName || "").trim() || (u.email ? u.email.split("@")[0] : "").trim();
-      if (quick) setUsername(quick);
-
-      const e = typeof u.email === "string" ? u.email.trim() : "";
-      setUserEmail(e);
-
-      const authPhoto = typeof u.photoURL === "string" && u.photoURL.trim() ? u.photoURL.trim() : null;
-      setPhotoUrl(authPhoto);
-
-      try {
-        const snap = await getDoc(doc(db, "users", u.uid));
-        if (snap.exists()) {
-          const data: any = snap.data();
-          const n = typeof data?.name === "string" ? data.name.trim() : "";
-          if (n) setUsername(n);
-
-          const mail = typeof data?.email === "string" ? data.email.trim() : "";
-          if (mail) setUserEmail(mail);
-
-          const fsPhoto = typeof data?.photoUrl === "string" && data.photoUrl.trim() ? data.photoUrl.trim() : null;
-          if (fsPhoto) setPhotoUrl(fsPhoto);
-        }
-      } catch {}
+    const unsub = onAuthStateChanged(auth, (u) => {
+      const uid = u?.uid ? String(u.uid) : null;
+      setMyUid(uid);
+      setMyPhotoUrl(null);
     });
-
     return () => unsub();
   }, []);
 
-  const openMenu = () => {
-    if (menuVisible) return;
-    setMenuOpen(true);
-    setMenuVisible(true);
-    menuX.setValue(MENU_WIDTH);
-    backdropOpacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(menuX, {
-        toValue: 0,
-        duration: 260,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdropOpacity, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
+  useEffect(() => {
+    if (!myUid) return;
+    const unsub = onSnapshot(
+      doc(db, "users", myUid),
+      (snap) => {
+        const data: any = snap.exists() ? snap.data() : null;
+        const nextPhoto = typeof data?.photoUrl === "string" ? data.photoUrl : null;
+        setMyPhotoUrl(nextPhoto);
+      },
+      () => {
+        setMyPhotoUrl(null);
+      }
+    );
+    return () => unsub();
+  }, [myUid]);
 
-  const closeMenu = () => {
-    if (!menuVisible) return;
-    Animated.parallel([
-      Animated.timing(menuX, {
-        toValue: MENU_WIDTH,
-        duration: 230,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 200,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) {
-        setMenuOpen(false);
-        setMenuVisible(false);
-        setEditOpen(false);
-        setSaveNotice("");
+  useEffect(() => {
+    const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(50));
+    const unsub = onSnapshot(q, (snap) => {
+      const next: PostItem[] = snap.docs
+        .map((d) => {
+          const data: any = d.data();
+          return {
+            id: d.id,
+            text: typeof data?.text === "string" ? data.text : "",
+            uid: typeof data?.uid === "string" ? data.uid : null,
+            username: typeof data?.username === "string" ? data.username : null,
+            photoUrl: typeof data?.photoUrl === "string" ? data.photoUrl : null,
+            createdAt: toMs(data?.createdAt) ?? toMs(data?.createdAtMs),
+          };
+        })
+        .filter((p) => p.text.trim().length > 0);
+
+      setPosts(next);
+      if (threadPostId && !next.some((p) => p.id === threadPostId)) {
+        setThreadPostId(null);
+        setReplies([]);
       }
     });
-  };
 
-  const toggleMenu = () => {
-    if (menuVisible || menuOpen) closeMenu();
-    else openMenu();
-  };
+    return () => unsub();
+  }, [threadPostId]);
 
-  const openEdit = () => {
-    const n = username === "Guest" ? "" : username;
-    const e = userEmail || "";
-    const p = photoUrl || null;
+  useEffect(() => {
+    if (!threadPostId) {
+      setReplies([]);
+      return;
+    }
 
-    setEditOpen(true);
-    setEditName(n);
-    setEditEmail(e);
-    setEditPassword("");
-    setEditPhoto(p);
+    const rq = query(collection(db, "posts", threadPostId, "replies"), orderBy("createdAt", "asc"), limit(250));
+    const unsub = onSnapshot(
+      rq,
+      (snap) => {
+        const next: ReplyItem[] = snap.docs
+          .map((d) => {
+            const data: any = d.data();
+            return {
+              id: d.id,
+              postId: threadPostId,
+              parentId: typeof data?.parentId === "string" ? data.parentId : null,
+              text: typeof data?.text === "string" ? data.text : "",
+              uid: typeof data?.uid === "string" ? data.uid : null,
+              username: typeof data?.username === "string" ? data.username : null,
+              photoUrl: typeof data?.photoUrl === "string" ? data.photoUrl : null,
+              createdAt: toMs(data?.createdAt) ?? toMs(data?.createdAtMs),
+            };
+          })
+          .filter((r) => r.text.trim().length > 0);
 
-    setBaseName(n);
-    setBaseEmail(e);
-    setBasePhoto(p);
-
-    setSaveNotice("");
-  };
-
-  const pickImage = async () => {
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) return;
-
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.85,
-        base64: true,
-      });
-
-      if (res.canceled) return;
-      const asset = res.assets?.[0];
-      if (!asset) return;
-
-      if (asset.base64) {
-        const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
-        setEditPhoto(dataUrl);
-        setPhotoBroken(false);
-        setPhotoUrl(dataUrl);
-        setSaveNotice("");
-        return;
+        setReplies(next);
+      },
+      () => {
+        setReplies([]);
       }
+    );
 
-      if (asset.uri) {
-        setEditPhoto(asset.uri);
-        setPhotoBroken(false);
-        setPhotoUrl(asset.uri);
-        setSaveNotice("");
-      }
-    } catch {}
-  };
+    return () => unsub();
+  }, [threadPostId]);
 
-  const editAsset = assetFor(editPhoto);
-  const editAvatarSource = editAsset ? editAsset : editPhoto ? { uri: editPhoto } : editPlaceholder;
-
-  const trim = (v: any) => (typeof v === "string" ? v.trim() : "");
-  const same = (a: any, b: any) => trim(a) === trim(b);
-
-  const nameChanged = trim(editName) && !same(editName, baseName);
-  const emailChanged = trim(editEmail) && !same(editEmail, baseEmail);
-  const photoChanged = (editPhoto || null) !== (basePhoto || null);
-  const passwordReady = editPassword.length === 0 || editPassword.length >= 6;
-  const passwordChanged = editPassword.length >= 6;
-
-  const hasChanges = (nameChanged || emailChanged || photoChanged || passwordChanged) && passwordReady;
-
-  const performSave = async () => {
+  const quickName = useMemo(() => {
     const u = auth.currentUser;
-    if (!u) {
-      showNotice("Please log in first", false);
-      return;
-    }
+    const n = typeof u?.displayName === "string" ? u.displayName.trim() : "";
+    if (n) return n;
+    const e = typeof u?.email === "string" ? u.email.trim() : "";
+    return e && e.includes("@") ? e.split("@")[0] : "Guest";
+  }, []);
 
-    if (!hasChanges) {
-      showNotice(passwordReady ? "No changes to save" : "Password must be at least 6 characters.", false);
-      return;
-    }
+  const headerSubtitle = useMemo(() => {
+    const count = posts.length;
+    if (count === 0) return "No posts yet. Tap + to write your first thought.";
+    if (count === 1) return "1 post in your feed";
+    return `${count} posts in your feed`;
+  }, [posts.length]);
 
-    const nextName = editName.trim();
-    const nextEmail = editEmail.trim();
-    const nextPassword = editPassword;
+  const closeActions = () => {
+    if (deleting) return;
+    setActionOpen(false);
+    setActionPostId(null);
+    setActionPostUid(null);
+  };
 
-    setSaving(true);
+  const openActionsFor = (p: PostItem) => {
+    const uid = (p.uid || "").trim();
+    if (!myUid || !uid || uid !== myUid) return;
+    setActionPostId(p.id);
+    setActionPostUid(uid);
+    setActionOpen(true);
+  };
 
+  const deleteMyPost = async () => {
+    if (deleting) return;
+    if (!myUid) return;
+    if (!actionPostId || !actionPostUid) return;
+    if (actionPostUid !== myUid) return;
+
+    setDeleting(true);
     try {
-      const fsPatch: any = { updatedAt: Date.now() };
-      if (nextName && !same(nextName, baseName)) fsPatch.name = nextName;
-      if (nextEmail && !same(nextEmail, baseEmail)) fsPatch.email = nextEmail;
-      if (photoChanged && editPhoto) fsPatch.photoUrl = editPhoto;
-
-      await setDoc(doc(db, "users", u.uid), fsPatch, { merge: true });
-
-      if (nextName && nextName !== (u.displayName || "").trim()) {
-        await updateProfile(u, { displayName: nextName });
-      }
-
-      if (isHttpUrl(editPhoto) && editPhoto !== (u.photoURL || "").trim()) {
-        await updateProfile(u, { photoURL: editPhoto });
-      }
-
-      if (nextEmail && nextEmail !== (u.email || "").trim()) {
-        await updateEmail(u, nextEmail);
-        setUserEmail(nextEmail);
-      }
-
-      let didPasswordChange = false;
-      if (nextPassword && nextPassword.length >= 6) {
-        await updatePassword(u, nextPassword);
-        didPasswordChange = true;
-      }
-
-      if (nextName) setUsername(nextName);
-      if (photoChanged && editPhoto) {
-        setPhotoUrl(editPhoto);
-        setPhotoBroken(false);
-      }
-
-      if (didPasswordChange) {
-        closeMenu();
-        await signOut(auth);
-        router.replace("/login");
-        return;
-      }
-
-      setBaseName(nextName || baseName);
-      setBaseEmail(nextEmail || baseEmail);
-      setBasePhoto(photoChanged ? (editPhoto || null) : basePhoto);
-      setEditPassword("");
-
-      showNotice("Changes successfully", true);
-    } catch (err: any) {
-      showNotice(friendlyError(err), false);
+      await deleteDoc(doc(db, "posts", actionPostId));
+      closeActions();
+    } catch {
+      closeActions();
     } finally {
-      setSaving(false);
+      setDeleting(false);
     }
+  };
+
+  const toggleThread = (postId: string) => {
+    setThreadPostId((curr) => (curr === postId ? null : postId));
+  };
+
+  const openReplyForPost = (postId: string, username?: string | null) => {
+    if (!auth.currentUser) {
+      router.replace("/login");
+      return;
+    }
+    setThreadPostId(postId);
+    setReplyingPostId(postId);
+    setReplyParentId(null);
+    setReplyParentName((username || "").trim() || "Anonymous");
+    setReplyText("");
+    setReplyOpen(true);
+  };
+
+  const openReplyForReply = (postId: string, r: ReplyItem) => {
+    if (!auth.currentUser) {
+      router.replace("/login");
+      return;
+    }
+    setThreadPostId(postId);
+    setReplyingPostId(postId);
+    setReplyParentId(r.id);
+    setReplyParentName((r.username || "").trim() || "Someone");
+    setReplyText("");
+    setReplyOpen(true);
+  };
+
+  const closeReply = () => {
+    if (sendingReply) return;
+    setReplyOpen(false);
+    setReplyText("");
+    setReplyingPostId(null);
+    setReplyParentId(null);
+    setReplyParentName("");
+  };
+
+  const canSendReply = useMemo(() => {
+    const t = replyText.trim();
+    return !!auth.currentUser && !!replyingPostId && t.length > 0 && t.length <= 280 && !sendingReply;
+  }, [replyText, replyingPostId, sendingReply]);
+
+  const sendReply = async () => {
+    if (!auth.currentUser) {
+      router.replace("/login");
+      return;
+    }
+    if (!myUid) return;
+    if (!replyingPostId) return;
+
+    const t = replyText.trim();
+    if (!t || t.length > 280) return;
+
+    setSendingReply(true);
+    try {
+      const payload: any = {
+        uid: myUid,
+        username: quickName,
+        photoUrl: myPhotoUrl || null,
+        text: t,
+        parentId: replyParentId || null,
+        createdAt: serverTimestamp(),
+        createdAtMs: Date.now(),
+      };
+
+      await addDoc(collection(db, "posts", replyingPostId, "replies"), payload);
+      closeReply();
+    } catch {
+      setSendingReply(false);
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const whenLabel = (ms: number | null) => {
+    if (!ms) return "";
+    let diff = nowMs - ms;
+    if (diff < 0) diff = 0;
+
+    const s = Math.floor(diff / 1000);
+    if (s < 10) return "just now";
+    if (s < 60) return `${s}s`;
+
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+
+    const d = Math.floor(h / 24);
+    if (d < 7) return `${d}d`;
+
+    const w = Math.floor(d / 7);
+    if (w < 52) return `${w}w`;
+
+    const y = Math.floor(w / 52);
+    return `${y}y`;
+  };
+
+  const replyTree = useMemo(() => {
+    const byParent: Record<string, ReplyItem[]> = {};
+    const rootKey = "__root__";
+
+    for (const r of replies) {
+      const key = r.parentId ? r.parentId : rootKey;
+      if (!byParent[key]) byParent[key] = [];
+      byParent[key].push(r);
+    }
+
+    return { byParent, rootKey };
+  }, [replies]);
+
+  const renderReplyList = (postId: string, parentId: string | null, depth: number) => {
+    const key = parentId ? parentId : replyTree.rootKey;
+    const kids = replyTree.byParent[key] || [];
+    if (!kids.length) return null;
+
+    return kids.map((r) => {
+      const name = (r.username || "").trim() || "Anonymous";
+      const uidShort = r.uid ? `@${String(r.uid).slice(0, 6)}` : "";
+      const time = whenLabel(r.createdAt);
+
+      return (
+        <View key={r.id} style={[styles.replyRow, depth > 0 && { marginLeft: Math.min(44, depth * 14) }]}>
+          <Image source={sourceFor(r.photoUrl)} style={styles.replyAvatar} contentFit="cover" />
+          <View style={styles.replyBody}>
+            <View style={styles.replyHead}>
+              <ThemedText style={styles.replyName} numberOfLines={1}>
+                {name}
+              </ThemedText>
+              {!!uidShort && <ThemedText style={styles.replyHandle}>{uidShort}</ThemedText>}
+              {!!time && <ThemedText style={styles.replyTime}>{time}</ThemedText>}
+              <View style={{ flex: 1 }} />
+              <Pressable style={({ pressed }) => [styles.replyBtn, pressed && styles.pressed]} onPress={() => openReplyForReply(postId, r)}>
+                <ThemedText style={styles.replyBtnText}>Reply</ThemedText>
+              </Pressable>
+            </View>
+
+            <ThemedText style={styles.replyText}>{r.text}</ThemedText>
+
+            {renderReplyList(postId, r.id, depth + 1)}
+          </View>
+        </View>
+      );
+    });
   };
 
   return (
     <ThemedView style={styles.container}>
       <StatusBar style="dark" />
 
-      <Navigation
-        username={username}
-        avatarSource={avatarSource}
-        onMenuPress={toggleMenu}
-        onAvatarError={() => {
-          if (avatarCanError) setPhotoBroken(true);
-        }}
-      />
+      <Navigation />
 
       <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-        <View style={styles.quoteCard}>
-          <ThemedText type="title" style={styles.quoteTitle}>
-            Quote of the Day
-          </ThemedText>
-          <ThemedText style={styles.quoteText}>{quote}</ThemedText>
+        <View style={styles.hero}>
+          <View style={styles.heroTop}>
+            <View style={styles.heroLeft}>
+              <ThemedText style={styles.heroKicker}>Today</ThemedText>
+              <ThemedText type="title" style={styles.heroTitle}>
+                Your feed
+              </ThemedText>
+              <ThemedText style={styles.heroSub}>{headerSubtitle}</ThemedText>
+            </View>
+          </View>
 
-          <View style={styles.quoteActions}>
-            {SHOW_SOCIAL && (
-              <>
-                <Pressable style={styles.circleBtn}>
-                  <ThemedText style={styles.circleIcon}>✦</ThemedText>
-                </Pressable>
-                <Pressable style={styles.circleBtn}>
-                  <ThemedText style={styles.circleIcon}>♡</ThemedText>
-                </Pressable>
-                <Pressable style={styles.circleBtn}>
-                  <ThemedText style={styles.circleIcon}>⟳</ThemedText>
-                </Pressable>
-              </>
-            )}
-            <Pressable style={styles.generateBtn} onPress={() => setQIndex((i) => i + 1)}>
-              <ThemedText style={styles.generateText}>GENERATE</ThemedText>
-            </Pressable>
+          <View style={styles.quoteCard}>
+            <View style={styles.quoteHead}>
+              <ThemedText style={styles.quoteLabel} numberOfLines={2}>
+                Quote of the day
+              </ThemedText>
+              <Pressable style={({ pressed }) => [styles.quoteBtn, pressed && styles.pressed]} onPress={() => setQIndex((i) => i + 1)}>
+                <ThemedText style={styles.quoteBtnText}>Generate</ThemedText>
+              </Pressable>
+            </View>
+            <ThemedText style={styles.quoteText}>{quote}</ThemedText>
           </View>
         </View>
 
+        <View style={styles.sectionHead}>
+          <ThemedText style={styles.sectionTitle}>Latest posts</ThemedText>
+          <ThemedText style={styles.sectionHint}>Most recent first</ThemedText>
+        </View>
+
         <View style={styles.feedWrap}>
-          {FEED.map((text, i) => (
-            <View key={i} style={styles.post}>
+          {posts.length === 0 ? (
+            <View style={styles.emptyCard}>
               <View style={styles.postHead}>
-                <Image source={fallbackAvatar} style={styles.avatarImg} contentFit="cover" />
+                <Image source={sourceFor(myPhotoUrl || null)} style={styles.avatarImg} contentFit="cover" />
                 <View style={styles.nameWrap}>
-                  <ThemedText style={styles.name}>Anonymous</ThemedText>
+                  <ThemedText style={styles.name}>{auth.currentUser ? quickName : "Anonymous"}</ThemedText>
                 </View>
-                <Pressable style={styles.moreBtn}>
-                  <ThemedText style={styles.moreIcon}>⋯</ThemedText>
-                </Pressable>
               </View>
-              <ThemedText style={styles.postText}>{text}</ThemedText>
-              <View style={styles.postActions}>
-                {SHOW_SOCIAL && (
-                  <>
-                    <Pressable style={styles.postAction}>
-                      <ThemedText style={styles.actionIcon}>♡</ThemedText>
-                    </Pressable>
-                    <Pressable style={styles.postAction}>
-                      <ThemedText style={styles.actionIcon}>💬</ThemedText>
-                    </Pressable>
-                    <Pressable style={styles.postAction}>
-                      <ThemedText style={styles.actionIcon}>⟳</ThemedText>
-                    </Pressable>
-                  </>
-                )}
-              </View>
+              <ThemedText style={styles.emptyTitle}>No posts yet</ThemedText>
+              <ThemedText style={styles.emptyText}>Tap the + button to write your first thought.</ThemedText>
             </View>
-          ))}
+          ) : (
+            posts.map((p) => {
+              const isMe = !!myUid && (p.uid || "") === myUid;
+              const bestPhoto = (isMe ? myPhotoUrl : null) || p.photoUrl || null;
+              const isThreadOpen = threadPostId === p.id;
+              const postTime = whenLabel(p.createdAt ?? null);
+
+              return (
+                <View key={p.id} style={styles.post}>
+                  <View style={styles.postHead}>
+                    <Image source={sourceFor(bestPhoto)} style={styles.avatarImg} contentFit="cover" />
+                    <View style={styles.nameWrap}>
+                      <ThemedText style={styles.name}>{(p.username || "").trim() || "Anonymous"}</ThemedText>
+                      <View style={styles.handleRow}>
+                        {!!p.uid && <ThemedText style={styles.handle}>@{String(p.uid).slice(0, 6)}</ThemedText>}
+                        {!!postTime && <ThemedText style={styles.postTime}>{postTime}</ThemedText>}
+                      </View>
+                    </View>
+
+                    <Pressable style={({ pressed }) => [styles.moreBtn, pressed && styles.pressed, !isMe && styles.moreBtnDisabled]} onPress={() => openActionsFor(p)} disabled={!isMe}>
+                      <ThemedText style={[styles.moreIcon, !isMe && styles.moreIconDisabled]}>⋯</ThemedText>
+                    </Pressable>
+                  </View>
+
+                  <ThemedText style={styles.postText}>{p.text}</ThemedText>
+
+                  <View style={styles.threadRow}>
+                    <Pressable style={({ pressed }) => [styles.threadBtn, pressed && styles.pressed]} onPress={() => openReplyForPost(p.id, p.username)}>
+                      <ThemedText style={styles.threadBtnText}>Reply</ThemedText>
+                    </Pressable>
+
+                    <Pressable style={({ pressed }) => [styles.threadBtn, styles.threadBtnGhost, pressed && styles.pressed]} onPress={() => toggleThread(p.id)}>
+                      <ThemedText style={styles.threadBtnTextGhost}>{isThreadOpen ? "Hide replies" : "View replies"}</ThemedText>
+                    </Pressable>
+
+                    <View style={{ flex: 1 }} />
+
+                    <View style={styles.pill}>
+                      <ThemedText style={styles.pillText}>Thought</ThemedText>
+                    </View>
+                  </View>
+
+                  {isThreadOpen && (
+                    <View style={styles.threadBox}>
+                      {replies.length === 0 ? (
+                        <View style={styles.threadEmpty}>
+                          <ThemedText style={styles.threadEmptyTitle}>No replies yet</ThemedText>
+                          <ThemedText style={styles.threadEmptyText}>Be the first to reply.</ThemedText>
+                        </View>
+                      ) : (
+                        <View style={styles.replyList}>{renderReplyList(p.id, null, 0)}</View>
+                      )}
+                    </View>
+                  )}
+
+                  {SHOW_SOCIAL && (
+                    <View style={styles.postActions}>
+                      <Pressable style={styles.postAction}>
+                        <ThemedText style={styles.actionIcon}>♡</ThemedText>
+                      </Pressable>
+                      <Pressable style={styles.postAction}>
+                        <ThemedText style={styles.actionIcon}>💬</ThemedText>
+                      </Pressable>
+                      <Pressable style={styles.postAction}>
+                        <ThemedText style={styles.actionIcon}>⟳</ThemedText>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
         </View>
       </ScrollView>
 
-      <Pressable style={styles.fab} onPress={() => router.push("/compose")}>
+      <Pressable style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]} onPress={() => router.push("/compose")}>
         <ThemedText style={styles.fabPlus}>＋</ThemedText>
       </Pressable>
 
@@ -550,279 +631,243 @@ export default function Menu() {
         </View>
       )}
 
-      {menuVisible && (
-        <>
-          <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} pointerEvents="none" />
-          <Pressable style={[styles.dismissArea, { right: MENU_WIDTH }]} onPress={closeMenu} />
-          <View style={styles.menuCaret} />
-          <Animated.View
-            style={[
-              styles.menuSheet,
-              {
-                width: MENU_WIDTH,
-                transform: [{ translateX: menuX }],
-                paddingTop: 14 + Math.max(insets.top, 12),
-                paddingBottom: 16 + Math.max(insets.bottom, 12),
-              },
-            ]}
-          >
-            <View style={styles.menuTopRow}>
-              <View style={styles.menuTopLeft}>
-                {editOpen && (
-                  <Pressable
-                    style={styles.backBtn}
-                    onPress={() => {
-                      setEditOpen(false);
-                      setSaveNotice("");
-                    }}
-                  >
-                    <ThemedText style={styles.backIcon}>‹</ThemedText>
-                  </Pressable>
-                )}
-                <ThemedText style={styles.menuTitle}>{editOpen ? "Edit profile" : "Menu"}</ThemedText>
+      <Modal transparent visible={actionOpen} animationType="fade" onRequestClose={closeActions} statusBarTranslucent presentationStyle="overFullScreen">
+        <View style={styles.actionWrap}>
+          <Pressable style={styles.actionBackdrop} onPress={closeActions} />
+          <View style={styles.actionCard}>
+            <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed, deleting && styles.actionBtnDisabled]} onPress={deleteMyPost} disabled={deleting}>
+              <ThemedText style={styles.actionDeleteText}>{deleting ? "Deleting..." : "Delete post"}</ThemedText>
+            </Pressable>
+
+            <Pressable style={({ pressed }) => [styles.actionBtn, styles.actionCancelBtn, pressed && styles.pressed]} onPress={closeActions}>
+              <ThemedText style={styles.actionCancelText}>Cancel</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal transparent visible={replyOpen} animationType="fade" onRequestClose={closeReply} statusBarTranslucent presentationStyle="overFullScreen">
+        <View style={styles.replyModalWrap}>
+          <Pressable style={styles.replyBackdropPress} onPress={closeReply} />
+          <View style={styles.replyModalCard}>
+            <View style={styles.replyModalTop}>
+              <View style={styles.replyModalDot} />
+            </View>
+
+            <View style={styles.replyModalHead}>
+              <View style={styles.replyTitleWrap}>
+                <ThemedText style={styles.replyModalKicker}>Replying to</ThemedText>
+                <ThemedText style={styles.replyModalTitle} numberOfLines={1}>
+                  {replyParentName}
+                </ThemedText>
               </View>
-              <Pressable onPress={closeMenu} style={styles.closeBtn}>
-                <ThemedText style={styles.closeIcon}>✕</ThemedText>
+
+              <Pressable style={({ pressed }) => [styles.replyModalX, pressed && styles.pressed]} onPress={closeReply}>
+                <ThemedText style={styles.replyModalXText}>✕</ThemedText>
               </Pressable>
             </View>
 
-            {!editOpen ? (
-              <>
-                <View style={styles.menuHeader}>
-                  <Image
-                    source={avatarSource}
-                    style={styles.menuHeaderAvatar}
-                    contentFit="cover"
-                    onError={() => {
-                      if (avatarCanError) setPhotoBroken(true);
-                    }}
-                  />
-                  <View style={styles.menuHeaderTextWrap}>
-                    <ThemedText style={styles.menuHeaderName}>{username}</ThemedText>
-                    <Pressable onPress={openEdit} style={({ pressed }) => [styles.editTextBtn, pressed && styles.editTextBtnPressed]}>
-                      <ThemedText style={styles.editTextBtnText}>Edit Profile</ThemedText>
-                    </Pressable>
-                  </View>
-                </View>
+            <View style={styles.replyInputWrap}>
+              <TextInput
+                value={replyText}
+                onChangeText={setReplyText}
+                placeholder="Write your reply..."
+                placeholderTextColor="#9ca3af"
+                style={styles.replyInput}
+                multiline
+                maxLength={280}
+                textAlignVertical="top"
+              />
 
-                <View style={styles.menuDivider} />
-
-                <Pressable
-                  style={({ pressed }) => [styles.menuItem, styles.logoutItem, pressed && styles.menuItemPressed]}
-                  onPress={async () => {
-                    closeMenu();
-                    await signOut(auth);
-                    router.replace("/login");
-                  }}
-                >
-                  <View style={styles.menuItemLeft}>
-                    <View style={[styles.menuIconBadge, styles.logoutBadge]}>
-                      <Ionicons name="log-out-outline" size={MENU_ICON_SIZE} color="#b91c1c" />
-                    </View>
-                    <ThemedText style={[styles.menuText, styles.logoutText]}>Log out</ThemedText>
-                  </View>
-                  <ThemedText style={[styles.menuChevron, styles.logoutText]}>›</ThemedText>
+              <View style={styles.replyMetaRow}>
+                <ThemedText style={styles.replyMetaText}>{replyText.trim().length}/280</ThemedText>
+                <View style={{ flex: 1 }} />
+                <Pressable style={({ pressed }) => [styles.replyCancelBtn, pressed && styles.pressed]} onPress={closeReply} disabled={sendingReply}>
+                  <ThemedText style={styles.replyCancelText}>Cancel</ThemedText>
                 </Pressable>
-              </>
-            ) : (
-              <>
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.editScrollPad}>
-                  <View style={styles.sectionCard}>
-                    <ThemedText style={styles.sectionTitle}>Account</ThemedText>
-
-                    <View style={styles.field}>
-                      <ThemedText style={styles.fieldLabel}>Username</ThemedText>
-                      <View style={styles.inputWrap}>
-                        <TextInput
-                          value={editName}
-                          onChangeText={(t) => {
-                            setEditName(t);
-                            setSaveNotice("");
-                          }}
-                          placeholder="Enter username"
-                          placeholderTextColor="#9ca3af"
-                          style={styles.input}
-                          autoCapitalize="words"
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.field}>
-                      <ThemedText style={styles.fieldLabel}>Email</ThemedText>
-                      <View style={styles.inputWrap}>
-                        <TextInput
-                          value={editEmail}
-                          onChangeText={(t) => {
-                            setEditEmail(t);
-                            setSaveNotice("");
-                          }}
-                          placeholder="Enter email"
-                          placeholderTextColor="#9ca3af"
-                          style={styles.input}
-                          autoCapitalize="none"
-                          keyboardType="email-address"
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.field}>
-                      <ThemedText style={styles.fieldLabel}>Password</ThemedText>
-                      <View style={styles.inputWrap}>
-                        <TextInput
-                          value={editPassword}
-                          onChangeText={(t) => {
-                            setEditPassword(t);
-                            setSaveNotice("");
-                          }}
-                          placeholder="New password (min 6)"
-                          placeholderTextColor="#9ca3af"
-                          style={styles.input}
-                          secureTextEntry
-                        />
-                      </View>
-                      {!passwordReady && (
-                        <ThemedText style={[styles.noticeText, styles.noticeBad, styles.passwordHint]}>
-                          Password must be at least 6 characters.
-                        </ThemedText>
-                      )}
-                    </View>
-
-                    <View style={styles.field}>
-                      <ThemedText style={styles.fieldLabel}>Profile picture</ThemedText>
-
-                      <Pressable style={styles.photoRow} onPress={pickImage}>
-                        <Image source={editAvatarSource} style={styles.editAvatar} contentFit="cover" />
-                        <View style={styles.photoMeta}>
-                          <ThemedText style={styles.photoTitle}>Upload from gallery</ThemedText>
-                          <ThemedText style={styles.photoSub}>Tap to pick an image.</ThemedText>
-                        </View>
-                      </Pressable>
-
-                      <View style={styles.avatarGrid}>
-                        {AVATAR_CHOICES.map((a) => {
-                          const selected = (editPhoto || "") === a.key;
-                          return (
-                            <Pressable
-                              key={a.key}
-                              onPress={() => {
-                                setEditPhoto(a.key);
-                                setSaveNotice("");
-                              }}
-                              style={({ pressed }) => [styles.avatarOption, selected && styles.avatarOptionSelected, pressed && styles.avatarOptionPressed]}
-                            >
-                              <Image source={a.src} style={styles.avatarOptionImg} contentFit="cover" />
-                              <ThemedText style={styles.avatarOptionLabel}>{a.label}</ThemedText>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </View>
-
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.primaryBtn,
-                        (saving || !auth.currentUser || !hasChanges) && styles.primaryBtnDisabled,
-                        pressed && !saving && hasChanges && styles.primaryBtnPressed,
-                      ]}
-                      disabled={saving || !auth.currentUser || !hasChanges}
-                      onPress={performSave}
-                    >
-                      <ThemedText style={styles.primaryBtnText}>{saving ? "SAVING..." : "SAVE CHANGES"}</ThemedText>
-                    </Pressable>
-
-                    {!!saveNotice && (
-                      <ThemedText style={[styles.noticeText, saveOk ? styles.noticeOk : styles.noticeBad]}>
-                        {saveNotice}
-                      </ThemedText>
-                    )}
-
-                    {!saveNotice && !hasChanges && (
-                      <ThemedText style={[styles.noticeText, styles.noticeMuted]}>
-                        No changes yet.
-                      </ThemedText>
-                    )}
-                  </View>
-                </ScrollView>
-              </>
-            )}
-          </Animated.View>
-        </>
-      )}
+                <Pressable style={({ pressed }) => [styles.replySendBtn, pressed && styles.pressed, !canSendReply && styles.replySendBtnDisabled]} onPress={sendReply} disabled={!canSendReply}>
+                  <ThemedText style={styles.replySendText}>{sendingReply ? "Sending..." : "Send"}</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "white" },
+  scrollPad: { paddingHorizontal: 12, paddingBottom: 170 },
 
-  scrollPad: { paddingHorizontal: 12, paddingBottom: 160 },
+  pressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+
+  hero: { marginTop: 8, gap: 12 },
+  heroTop: {
+    backgroundColor: "white",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  heroLeft: { flex: 1 },
+  heroKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase" },
+  heroTitle: { color: "#111" },
+  heroSub: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18 },
 
   quoteCard: {
     backgroundColor: "#0a0a0a",
-    borderRadius: 20,
-    padding: 16,
-    marginTop: 8,
+    borderRadius: 18,
+    padding: 14,
     shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   },
-  notifyBtn: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    width: 28,
-    height: 28,
+  quoteHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 },
+  quoteLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    paddingRight: 10,
+  },
+  quoteBtn: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "white",
     alignItems: "center",
     justifyContent: "center",
   },
-  notifyIcon: { color: "white", fontSize: 18 },
-  quoteTitle: { color: "white", textAlign: "center", marginBottom: 8, fontSize: 18, paddingRight: 28 },
-  quoteText: { color: "white", textAlign: "center", lineHeight: 22, marginTop: 6, marginBottom: 14 },
-  quoteActions: { flexDirection: "row", alignItems: "center", gap: 10 },
-  circleBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "white", alignItems: "center", justifyContent: "center" },
-  circleIcon: { color: "#111", fontSize: 16 },
-  generateBtn: {
-    marginLeft: "auto",
-    backgroundColor: "white",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-  generateText: { color: "#111", fontSize: 12, letterSpacing: 0.5 },
+  quoteBtnText: { color: "#111", fontSize: 12, letterSpacing: 0.3, textTransform: "uppercase" },
+  quoteText: { color: "white", lineHeight: 22, marginTop: 2 },
 
-  feedWrap: { marginTop: 16, gap: 10 },
-  post: { backgroundColor: "white", borderRadius: 14, borderWidth: 1, borderColor: "#e5e7eb", padding: 12 },
+  sectionHead: { marginTop: 14, paddingHorizontal: 2, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  sectionTitle: { fontSize: 13, color: "#111", letterSpacing: 0.3 },
+  sectionHint: { fontSize: 12, color: "#6b7280" },
+
+  feedWrap: { marginTop: 10, gap: 10 },
+
+  post: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    padding: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
   postHead: { flexDirection: "row", alignItems: "center" },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#0a0a0a" },
-  avatarImg: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#e5e7eb" },
-  nameWrap: { marginLeft: 10, flex: 1 },
-  name: { color: "#6b7280", fontSize: 12 },
-  moreBtn: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
-  moreIcon: { fontSize: 18, color: "#111" },
-  postText: { marginTop: 6, fontSize: 14, color: "#111" },
-  postActions: { flexDirection: "row", alignItems: "center", gap: 18, marginTop: 10, marginLeft: 4 },
+  avatarImg: { width: 38, height: 38, borderRadius: 12, backgroundColor: "#e5e7eb" },
+  nameWrap: { marginLeft: 10, flex: 1, minWidth: 0 },
+  name: { color: "#111", fontSize: 13 },
+  handleRow: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 8 },
+  handle: { color: "#6b7280", fontSize: 11 },
+  postTime: { color: "#6b7280", fontSize: 11 },
+
+  moreBtn: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#f3f4f6", borderWidth: 1, borderColor: "#e5e7eb" },
+  moreIcon: { fontSize: 18, color: "#111", marginTop: -2 },
+  moreBtnDisabled: { opacity: 0.45 },
+  moreIconDisabled: { color: "#6b7280" },
+
+  postText: { marginTop: 10, fontSize: 14, color: "#111", lineHeight: 20 },
+
+  pill: {
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pillText: { fontSize: 11, color: "#111" },
+
+  threadRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  threadBtn: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "#111",
+    borderWidth: 1,
+    borderColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  threadBtnGhost: { backgroundColor: "white", borderColor: "#e5e7eb" },
+  threadBtnText: { color: "white", fontSize: 12, letterSpacing: 0.2 },
+  threadBtnTextGhost: { color: "#111", fontSize: 12, letterSpacing: 0.2 },
+
+  threadBox: { marginTop: 12, borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.06)", paddingTop: 12 },
+  threadEmpty: { paddingVertical: 8 },
+  threadEmptyTitle: { fontSize: 12, color: "#111" },
+  threadEmptyText: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18 },
+  replyList: { gap: 10 },
+
+  replyRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 10 },
+  replyAvatar: { width: 30, height: 30, borderRadius: 10, backgroundColor: "#e5e7eb" },
+  replyBody: { flex: 1, minWidth: 0 },
+  replyHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  replyName: { fontSize: 12, color: "#111", maxWidth: 140 },
+  replyHandle: { fontSize: 11, color: "#6b7280" },
+  replyTime: { fontSize: 11, color: "#6b7280" },
+  replyText: { marginTop: 6, fontSize: 13, color: "#111", lineHeight: 18 },
+
+  replyBtn: {
+    height: 24,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  replyBtnText: { fontSize: 11, color: "#111" },
+
+  postActions: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 14 },
   postAction: { paddingVertical: 2, paddingHorizontal: 4 },
   actionIcon: { fontSize: 14, color: "#111" },
+
+  emptyCard: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    padding: 12,
+  },
+  emptyTitle: { marginTop: 10, fontSize: 14, color: "#111" },
+  emptyText: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18 },
 
   fab: {
     position: "absolute",
     bottom: 74,
-    alignSelf: "center",
-    width: 58,
-    height: 58,
-    borderRadius: 10,
-    backgroundColor: "white",
+    right: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "#111",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#111",
   },
-  fabPlus: { fontSize: 28, lineHeight: 28, color: "#111" },
+  fabPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
+  fabPlus: { fontSize: 26, lineHeight: 26, color: "white" },
 
   bottomBar: {
     position: "absolute",
@@ -840,285 +885,99 @@ const styles = StyleSheet.create({
   navBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   navIcon: { color: "white", fontSize: 18 },
 
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
-  dismissArea: { position: "absolute", top: 0, bottom: 0, left: 0 },
-  menuCaret: { position: "absolute", opacity: 0 },
-
-  menuSheet: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    right: 0,
-    backgroundColor: "white",
-    borderTopLeftRadius: 22,
-    borderBottomLeftRadius: 22,
-    borderLeftWidth: 1,
-    borderColor: "#e5e7eb",
-    paddingHorizontal: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 24,
-    shadowOffset: { width: -8, height: 0 },
-  },
-
-  menuTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 10,
-  },
-  menuTopLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  menuTitle: { fontSize: 14, color: "#111", letterSpacing: 0.4 },
-
-  backBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: "#f3f4f6",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backIcon: { fontSize: 20, marginTop: -2, color: "#111" },
-
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f3f4f6",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  closeIcon: { fontSize: 16, color: "#111" },
-
-  menuHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 2,
-    paddingVertical: 10,
-  },
-  menuHeaderAvatar: { width: 44, height: 44, borderRadius: 12, backgroundColor: "#e5e7eb" },
-  menuHeaderTextWrap: { marginLeft: 12, flex: 1 },
-  menuHeaderName: { fontSize: 16, color: "#111" },
-
-  editTextBtn: { marginTop: 6, alignSelf: "flex-start" },
-  editTextBtnPressed: { opacity: 0.75 },
-  editTextBtnText: { fontSize: 12, color: "#111", textDecorationLine: "underline" },
-
-  editPill: {
-    marginTop: 6,
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: "#f3f4f6",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  editPillPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
-  editPillText: { fontSize: 12, color: "#111" },
-
-  menuDivider: { height: 1, backgroundColor: "rgba(0,0,0,0.06)", marginVertical: 10 },
-
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "white",
-    marginBottom: 10,
-  },
-  menuItemPressed: { transform: [{ scale: 0.99 }], opacity: 0.92 },
-
-  menuItemLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  menuIconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: "#f3f4f6",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  menuText: { fontSize: 14, color: "#111" },
-  menuChevron: { fontSize: 18, color: "#9ca3af", marginTop: -1 },
-
-  logoutItem: { marginTop: 2 },
-  logoutText: { color: "#b91c1c" },
-  logoutBadge: { backgroundColor: "#fef2f2", borderColor: "#fecaca" },
-
-  editScrollPad: { paddingBottom: 30 },
-  sectionCard: {
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 16,
-    padding: 12,
-    backgroundColor: "white",
-    marginBottom: 10,
-  },
-  sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  sectionTitle: { fontSize: 13, color: "#111" },
-
-  smallBtn: {
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: "#f3f4f6",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  smallBtnPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
-  smallBtnText: { fontSize: 12, color: "#111" },
-
-  uploadBtn: {
-    backgroundColor: "#0a0a0a",
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  uploadBtnText: { color: "white", fontSize: 12, letterSpacing: 0.6 },
-
-  photoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "white",
-  },
-  photoRowPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
-  editAvatar: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#e5e7eb" },
-  photoMeta: { flex: 1 },
-  photoTitle: { fontSize: 13, color: "#111" },
-  photoSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-
-  field: { marginTop: 10 },
-  fieldLabel: { fontSize: 12, color: "#6b7280", marginBottom: 6 },
-  inputWrap: {
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 14,
-    backgroundColor: "white",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  input: { fontSize: 14, color: "#111" },
-
-  avatarPickerTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "white",
-  },
-  editAvatarPreview: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#e5e7eb" },
-  avatarPickerMeta: { flex: 1 },
-  avatarPickerTitle: { fontSize: 13, color: "#111" },
-  avatarPickerSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-
-  avatarGrid: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  avatarOption: {
-    width: "47%",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "white",
-    padding: 10,
-    paddingRight: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  avatarOptionSelected: { borderColor: "#111", borderWidth: 2 },
-  avatarOptionPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
-  avatarOptionImg: { width: 34, height: 34, borderRadius: 12, backgroundColor: "#e5e7eb" },
-  avatarOptionLabel: { fontSize: 12, color: "#111" },
-
-  primaryBtn: {
+  actionWrap: { flex: 1, justifyContent: "flex-end" },
+  actionBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
+  actionCard: {
     marginTop: 12,
-    backgroundColor: "#0a0a0a",
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryBtnInline: {
-    backgroundColor: "#0a0a0a",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 110,
-  },
-  primaryBtnPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
-  primaryBtnDisabled: { opacity: 0.5 },
-  primaryBtnText: { color: "white", fontSize: 12, letterSpacing: 0.6 },
-
-  noticeText: { marginTop: 10, fontSize: 12, lineHeight: 18 },
-  noticeOk: { color: "#16a34a" },
-  noticeBad: { color: "#b91c1c" },
-  noticeMuted: { color: "#6b7280" },
-  passwordHint: { marginTop: 8 },
-
-  overlayWrap: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
-  overlayBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.35)" },
-  overlayCard: {
-    width: MENU_WIDTH - 28,
-    maxWidth: 320,
-    borderRadius: 16,
+    borderRadius: 18,
+    backgroundColor: "white",
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    backgroundColor: "white",
-    padding: 14,
+    padding: 12,
   },
-  overlayHeader: { flexDirection: "row", alignItems: "center" },
-  overlayIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+  actionBtn: {
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+  },
+  actionBtnDisabled: { opacity: 0.6 },
+  actionDeleteText: { color: "#b91c1c", fontSize: 13, letterSpacing: 0.3 },
+  actionCancelBtn: { backgroundColor: "#111", borderColor: "#111", marginBottom: 40 },
+  actionCancelText: { color: "white", fontSize: 13, letterSpacing: 0.3 },
+
+  replyModalWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 14,
+  },
+  replyBackdropPress: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
+  replyModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 22,
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    padding: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  replyModalTop: { alignItems: "center", marginBottom: 10 },
+  replyModalDot: { width: 46, height: 5, borderRadius: 999, backgroundColor: "#e5e7eb" },
+
+  replyTitleWrap: { flex: 1, minWidth: 0 },
+  replyModalHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  replyModalKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.3, textTransform: "uppercase" },
+  replyModalTitle: { marginTop: 2, fontSize: 16, color: "#111", letterSpacing: 0.2 },
+
+  replyModalX: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#f3f4f6",
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
   },
-  overlayTextWrap: { marginLeft: 10, flex: 1 },
-  overlayTitle: { fontSize: 14, color: "#111" },
-  overlaySub: { fontSize: 12, color: "#6b7280", marginTop: 4, lineHeight: 18 },
-  overlayActions: { marginTop: 12, flexDirection: "row", justifyContent: "flex-end" },
+  replyModalXText: { fontSize: 14, color: "#111" },
 
-  secondaryBtn: {
-    flex: 1,
-    borderRadius: 14,
+  replyInputWrap: { borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 16, padding: 12, backgroundColor: "white" },
+  replyInput: { minHeight: 120, fontSize: 14, color: "#111", lineHeight: 20 },
+
+  replyMetaRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  replyMetaText: { fontSize: 12, color: "#6b7280" },
+
+  replyCancelBtn: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "white",
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    backgroundColor: "white",
-    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  secondaryBtnPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
-  secondaryBtnText: { fontSize: 12, color: "#111", letterSpacing: 0.6 },
+  replyCancelText: { color: "#111", fontSize: 12, letterSpacing: 0.2 },
+
+  replySendBtn: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "#111",
+    borderWidth: 1,
+    borderColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  replySendBtnDisabled: { opacity: 0.5, borderWidth: 0, borderColor: "transparent" },
+  replySendText: { color: "white", fontSize: 12, letterSpacing: 0.2 },
 });
