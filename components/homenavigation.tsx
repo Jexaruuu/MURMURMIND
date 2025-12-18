@@ -14,11 +14,17 @@ export default function HomeNavigation() {
 
   const goHome = () => {
     if (isHome) return;
-    router.push("/menu");
+    router.push({ pathname: "/menu", params: { anim: isPost ? "fromLeft" : "fromRight" } });
   };
 
   const goPost = () => {
     if (isPost) return;
+
+    if (isHome) {
+      router.push({ pathname: "/compose", params: { anim: "fromRight" } });
+      return;
+    }
+
     router.push("/compose");
   };
 

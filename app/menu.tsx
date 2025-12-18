@@ -21,108 +21,82 @@ const tiles = [
   { label: "Sign up", href: "/signup" },
 ];
 
-const QUOTES = [
-  `"Anyone who has never made a mistake has never tried anything new"`,
-  `"Start where you are. Use what you have. Do what you can."`,
-  `"Small steps every day lead to big results."`,
-  `"Dream big, work hard, stay humble."`,
-  `"Progress, not perfection."`,
-  `"The secret of getting ahead is getting started."`,
-  `"Done is better than perfect."`,
-  `"Little by little, a little becomes a lot."`,
-  `"Make it simple, but significant."`,
-  `"Focus on what you can control."`,
-  `"One day or day one. You decide."`,
-  `"Be the energy you want to attract."`,
-  `"Keep going. Everything you need will come."`,
-  `"Consistency creates momentum."`,
-  `"Action cures fear."`,
-  `"Growth begins at the end of your comfort zone."`,
-  `"Do something today your future self will thank you for."`,
-  `"If it matters, you’ll make time."`,
-  `"The best time was yesterday. The next best is now."`,
-  `"You don’t have to be perfect to be amazing."`,
-  `"Small progress is still progress."`,
-  `"Win the morning, win the day."`,
-  `"Say yes to your goals and no to your excuses."`,
-  `"Be stubborn about goals, flexible about methods."`,
-  `"Slow is smooth. Smooth is fast."`,
-  `"Do it scared."`,
-  `"Show up, even when it’s hard."`,
-  `"Discipline is choosing what you want most over what you want now."`,
-  `"Work in silence; let success be the noise."`,
-  `"Start messy. Learn fast. Improve often."`,
-  `"You are what you repeatedly do."`,
-  `"Direction is more important than speed."`,
-  `"Dreams don’t work unless you do."`,
-  `"Better an oops than a what if."`,
-  `"Measure progress, not perfection."`,
-  `"Think it. Plan it. Do it."`,
-  `"Make your habits your superpower."`,
-  `"Keep moving; a step is still a step."`,
-  `"If you get tired, learn to rest, not quit."`,
-  `"Stay patient and trust your journey."`,
-  `"Make it happen. Shock everyone."`,
-  `"The comeback is always stronger than the setback."`,
-  `"Today’s choices are tomorrow’s results."`,
-  `"Less talk, more do."`,
-  `"You’re allowed to be both a masterpiece and a work in progress."`,
-  `"Results > reasons."`,
-  `"It’s okay to start over."`,
-  `"One more rep."`,
-  `"Run your own race."`,
-  `"Become the person your goals require."`,
-  `"You didn’t come this far to only come this far."`,
-  `"Small wins build big confidence."`,
-  `"Finish what you start."`,
-  `"Ship it."`,
-  `"Focus beats talent when talent doesn’t focus."`,
-  `"Show your work."`,
-  `"Progress is a decision."`,
-  `"Do the next right thing."`,
-  `"Make your future proud."`,
-  `"Your pace is the right pace."`,
-  `"Keep it up; you’re leveling up."`,
-  `"Learn, unlearn, relearn."`,
-  `"Be relentlessly resourceful."`,
-  `"Start before you feel ready."`,
-  `"Move with purpose."`,
-  `"Hard choices, easy life. Easy choices, hard life."`,
-  `"Plan the work, work the plan."`,
-  `"Create more than you consume."`,
-  `"Aim for better, not perfect."`,
-  `"One improvement a day."`,
-  `"Say no to what doesn’t serve you."`,
-  `"Curiosity over judgment."`,
-  `"Practice until it’s natural."`,
-  `"Stack good days."`,
-  `"Do less, but better."`,
-  `"Routine is a cheat code."`,
-  `"Build the habit, then increase the effort."`,
-  `"Momentum beats motivation."`,
-  `"Prioritize progress over pride."`,
-  `"Don’t break the chain."`,
-  `"Make it obvious, easy, and satisfying."`,
-  `"Track it to change it."`,
-  `"You grow through what you go through."`,
-  `"Keep promises to yourself."`,
-  `"Trust the process and push the pace."`,
-  `"You can do hard things."`,
-  `"Choose courage over comfort."`,
-  `"Direction, not perfection."`,
-  `"Iterate to great."`,
-  `"Tiny changes, remarkable results."`,
-  `"Be brave enough to be bad at something new."`,
-  `"Don’t let perfect be the enemy of good."`,
-  `"Protect your focus."`,
-  `"Turn pressure into practice."`,
-  `"Be consistent longer than others."`,
-  `"Build, measure, learn, repeat."`,
-  `"Start with why, finish with how."`,
-  `"Effort compounds."`,
-  `"Make the next hour count."`,
-  `"Keep showing up."`,
+const THOUGHTS = [
+  "If you’re reading this, you’re already doing better than my Wi-Fi.",
+  "I came, I saw, I forgot why I entered the room.",
+  "Plot twist: you’re the main character. Act like it.",
+  "Reminder: being tired is not a personality, but it is a lifestyle.",
+  "I’m not procrastinating. I’m letting the idea marinate.",
+  "Your future self is watching… and judging your snack choices.",
+  "Confidence level: walked into the wrong room like I owned it.",
+  "Small steps still count. Even the ones to the fridge.",
+  "If it’s not on the calendar, it’s a rumor.",
+  "Be proud of yourself. You survived another group chat.",
+  "Sometimes the plan is: vibe, adjust, repeat.",
+  "You don’t need a glow up. You need eight hours of sleep.",
+  "If life gives you lemons, ask for salt and tequila.",
+  "You can’t pour from an empty cup. Refill with iced coffee.",
+  "Your pace is valid. Even if it’s ‘turtle with ambition’.",
+  "Today’s mood: do not perceive me.",
+  "Your goals are calling. Put them on speaker and take notes.",
+  "Progress looks like messy hair and trying again anyway.",
+  "You’re allowed to start over. It’s literally free.",
+  "I support your dreams. From a safe emotional distance.",
+  "Some days you win. Some days you learn. Some days you nap.",
+  "Be the reason someone checks their phone and smiles… or panics.",
+  "If you feel stuck, change the playlist. Then change the mindset.",
+  "Don’t chase closure. Chase snacks and peace.",
+  "Life is short. Buy the cute notebook. Write nothing in it.",
+  "If you’re overwhelmed, do one tiny thing. Tiny is still heroic.",
+  "Your brain is not a browser. Stop opening 37 tabs.",
+  "Normalize saying: ‘Let me think’ instead of ‘Sure’ and suffering.",
+  "If it drains you, it’s not a flex. It’s a leak.",
+  "You’re doing great. Even if your laundry is judging you.",
+  "New rule: no self-talk you wouldn’t say to your best friend.",
+  "Being late is cardio. But let’s not make it a habit.",
+  "If you can’t find motivation, try discipline’s annoying cousin: routine.",
+  "Your peace is expensive. Don’t give discounts.",
+  "Drink water. Your organs are running a meeting without you.",
+  "You don’t need more time. You need fewer distractions with cute faces.",
+  "Some thoughts should stay inside thoughts. This one included.",
+  "If you’re not growing, you’re scrolling.",
+  "You’re not behind. You’re just on your own timeline—like a Netflix release.",
+  "Celebrate small wins. Like getting out of bed without negotiating.",
+  "If it’s for you, it won’t require you to beg.",
+  "Today’s goal: be 1% kinder to yourself. That’s a whole upgrade.",
+  "Your vibe introduces you before you speak. Make it a good trailer.",
+  "Stop shrinking to fit spaces that never fit you.",
+  "One bad day doesn’t cancel your progress. It’s not a subscription.",
+  "Your dream deserves more than ‘someday’. Schedule it.",
+  "Be brave. Worst case, you get a funny story.",
+  "Sometimes the glow up is just leaving what dimmed you.",
+  "If you’re waiting for a sign, this is it. Hi.",
+  "You can do hard things. You’ve done harder with less sleep.",
+  "If you can’t be productive, be peaceful. Both are wins.",
+  "Your energy is a currency. Spend it like you mean it.",
+  "Do it scared. Do it awkward. Do it anyway.",
+  "You’re allowed to outgrow people. Plants do it all the time.",
+  "Your mind is a garden. Stop watering thoughts that hurt you.",
+  "If it costs your mental health, it’s too expensive.",
+  "Take breaks. Even your phone needs charging.",
+  "You’re not lazy. You’re overstimulated and under-rested.",
+  "Make choices your future self won’t roast you for.",
+  "If it’s not a ‘heck yes’, it’s a ‘no, thanks’.",
+  "Don’t confuse being busy with being better.",
+  "You deserve good things that don’t come with anxiety.",
+  "Be consistent. Not perfect. Perfect is exhausting.",
+  "Remember: you’re learning. Even if it looks like chaos.",
+  "If you feel lost, return to basics: sleep, food, movement, sunlight.",
+  "You’re not too much. You’re just in the wrong room.",
+  "Protect your focus. It’s your superpower.",
+  "It’s okay to be a work in progress. Construction is loud.",
+  "Your boundaries are not mean. They’re maintenance.",
+  "If you’re spiraling, do something small and physical: stand up, breathe, reset.",
+  "You don’t need permission to choose yourself.",
+  "Let it be easy sometimes. You’re not being graded.",
+  "Keep going. Even if it’s slow. Even if it’s ugly. Especially then.",
 ];
+
 
 const SHOW_SOCIAL = false;
 const SHOW_BOTTOM_NAV = false;
@@ -210,8 +184,8 @@ type ReplyItem = {
 };
 
 export default function Menu() {
-  const [qIndex, setQIndex] = useState(0);
-  const quote = useMemo(() => QUOTES[qIndex % QUOTES.length], [qIndex]);
+  const [tIndex, setTIndex] = useState(0);
+  const thought = useMemo(() => THOUGHTS[tIndex % THOUGHTS.length], [tIndex]);
   const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<PostItem[]>([]);
@@ -246,6 +220,13 @@ export default function Menu() {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  const liveDateTime = useMemo(() => {
+    const d = new Date(nowMs);
+    const date = d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "2-digit", year: "numeric" });
+    const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return `${date} • ${time}`;
+  }, [nowMs]);
 
   const assetFor = (v: any) => {
     if (!v || typeof v !== "string") return null;
@@ -757,24 +738,24 @@ export default function Menu() {
         <View style={styles.hero}>
           <View style={styles.heroTop}>
             <View style={styles.heroLeft}>
-              <ThemedText style={styles.heroKicker}>Today</ThemedText>
+              <ThemedText style={styles.heroKicker}>{liveDateTime}</ThemedText>
               <ThemedText type="title" style={styles.heroTitle}>
-                Your feed
+                Our Thoughts.
               </ThemedText>
               <ThemedText style={styles.heroSub}>{headerSubtitle}</ThemedText>
             </View>
           </View>
 
-          <View style={styles.quoteCard}>
-            <View style={styles.quoteHead}>
-              <ThemedText style={styles.quoteLabel} numberOfLines={2}>
-                Quote of the day
+          <View style={styles.thoughtCard}>
+            <View style={styles.thoughtHead}>
+              <ThemedText style={styles.thoughtLabel} numberOfLines={2}>
+                Random Thoughts
               </ThemedText>
-              <Pressable style={({ pressed }) => [styles.quoteBtn, pressed && styles.pressed]} onPress={() => setQIndex((i) => i + 1)}>
-                <ThemedText style={styles.quoteBtnText}>Generate</ThemedText>
+              <Pressable style={({ pressed }) => [styles.thoughtBtn, pressed && styles.pressed]} onPress={() => setTIndex((i) => i + 1)}>
+                <ThemedText style={styles.thoughtBtnText}>Generate</ThemedText>
               </Pressable>
             </View>
-            <ThemedText style={styles.quoteText}>{quote}</ThemedText>
+            <ThemedText style={styles.thoughtText}>{thought}</ThemedText>
           </View>
         </View>
 
@@ -1001,10 +982,10 @@ const styles = StyleSheet.create({
   },
   heroLeft: { flex: 1 },
   heroKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase" },
-  heroTitle: { color: "#111" },
+  heroTitle: { color: "#111", fontSize: 28 },
   heroSub: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18 },
 
-  quoteCard: {
+  thoughtCard: {
     backgroundColor: "#0a0a0a",
     borderRadius: 18,
     padding: 14,
@@ -1013,8 +994,8 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   },
-  quoteHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 },
-  quoteLabel: {
+  thoughtHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 },
+  thoughtLabel: {
     flex: 1,
     minWidth: 0,
     color: "rgba(255,255,255,0.75)",
@@ -1023,7 +1004,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     paddingRight: 10,
   },
-  quoteBtn: {
+  thoughtBtn: {
     height: 30,
     paddingHorizontal: 12,
     borderRadius: 999,
@@ -1031,8 +1012,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  quoteBtnText: { color: "#111", fontSize: 12, letterSpacing: 0.3, textTransform: "uppercase" },
-  quoteText: { color: "white", lineHeight: 22, marginTop: 2 },
+  thoughtBtnText: { color: "#111", fontSize: 12, letterSpacing: 0.3, textTransform: "uppercase" },
+  thoughtText: { color: "white", lineHeight: 22, marginTop: 2 },
 
   sectionHead: { marginTop: 14, paddingHorizontal: 2, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
   sectionTitle: { fontSize: 13, color: "#111", letterSpacing: 0.3 },
