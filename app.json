@@ -51,12 +51,12 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "6e2aa9ed-8f01-49cc-8119-ad5a867e4a97"
+        "projectId": "ac8da3a4-63de-4fff-95d0-d29a7d8404e0"
       }
     },
     "owner": "jexterbarsana",
     "updates": {
-      "url": "https://u.expo.dev/6e2aa9ed-8f01-49cc-8119-ad5a867e4a97"
+      "url": "https://u.expo.dev/ac8da3a4-63de-4fff-95d0-d29a7d8404e0"
     }
   }
 }
