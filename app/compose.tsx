@@ -16,6 +16,7 @@ import {
   PanResponder,
   Platform,
   Pressable,
+  StatusBar as RNStatusBar,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -284,6 +285,11 @@ function DrawingModal({
 export default function Compose() {
   const insets = useSafeAreaInsets();
 
+  const topInset = useMemo(() => {
+    const androidH = Platform.OS === "android" ? Number(RNStatusBar.currentHeight || 0) : 0;
+    return Math.max(Number(insets.top || 0), androidH);
+  }, [insets.top]);
+
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
 
@@ -440,51 +446,40 @@ export default function Compose() {
 
   const onComposeScroll = (e: any) => {
     const y = Math.max(0, Number(e?.nativeEvent?.contentOffset?.y || 0));
-    const dy = y - lastScrollY.current;
-
-    if (y <= 0) {
-      setNavHidden(false);
-      lastScrollY.current = y;
-      return;
-    }
-
-    if (Math.abs(dy) >= 6) {
-      if (dy < 0) setNavHidden(true);
-      else setNavHidden(false);
-      lastScrollY.current = y;
-    }
+    lastScrollY.current = y;
+    setNavHidden(false);
   };
 
   const navTranslateY = navAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -(topNavH ? topNavH + 10 : 110)],
+    outputRange: [0, 0],
   });
 
   const navOpacity = navAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 0],
+    outputRange: [1, 1],
   });
 
   return (
     <ThemedView style={styles.container}>
       <StatusBar style="light" backgroundColor="#000" translucent />
 
-      <View pointerEvents="none" style={[styles.statusBg, { height: insets.top }]} />
+      <View pointerEvents="none" style={[styles.statusBg, { height: topInset }]} />
 
       <Animated.View
         style={[styles.topNavWrap, { transform: [{ translateY: navTranslateY }], opacity: navOpacity }]}
-        pointerEvents={navHiddenRef.current ? "none" : "auto"}
+        pointerEvents="auto"
         onLayout={(e) => {
           const h = Math.max(0, Math.floor(e.nativeEvent.layout.height));
           if (h && h !== topNavH) setTopNavH(h);
         }}
       >
         <Navigation />
-        <View style={[styles.statusBg, { height: insets.top }]} />
+        <View style={[styles.statusBg, { height: topInset }]} />
       </Animated.View>
 
       <KeyboardAvoidingView
-        style={[styles.flex, { paddingTop: (topNavH || 0) + 10 }]}
+        style={[styles.flex, { paddingTop: topNavH || 0 }]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView

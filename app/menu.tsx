@@ -97,7 +97,6 @@ const THOUGHTS = [
   "Keep going. Even if it’s slow. Even if it’s ugly. Especially then.",
 ];
 
-
 const SHOW_SOCIAL = false;
 const SHOW_BOTTOM_NAV = false;
 const SHOW_FAB = false;
@@ -686,29 +685,18 @@ export default function Menu() {
 
   const onFeedScroll = (e: any) => {
     const y = Math.max(0, Number(e?.nativeEvent?.contentOffset?.y || 0));
-    const dy = y - lastScrollY.current;
-
-    if (y <= 0) {
-      setNavHidden(false);
-      lastScrollY.current = y;
-      return;
-    }
-
-    if (Math.abs(dy) >= 6) {
-      if (dy > 0) setNavHidden(true);
-      else setNavHidden(false);
-      lastScrollY.current = y;
-    }
+    lastScrollY.current = y;
+    setNavHidden(false);
   };
 
   const navTranslateY = navAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -(topNavH ? topNavH + 10 : 110)],
+    outputRange: [0, 0],
   });
 
   const navOpacity = navAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 0],
+    outputRange: [1, 1],
   });
 
   return (
@@ -719,7 +707,6 @@ export default function Menu() {
 
       <Animated.View
         style={[styles.topNavWrap, { transform: [{ translateY: navTranslateY }], opacity: navOpacity }]}
-        pointerEvents={navHiddenRef.current ? "none" : "auto"}
         onLayout={(e) => {
           const h = Math.max(0, Math.floor(e.nativeEvent.layout.height));
           if (h && h !== topNavH) setTopNavH(h);
