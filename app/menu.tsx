@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from "@expo-google-fonts/poppins";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -25,8 +26,8 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, BackHandler, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 
 const tiles = [
@@ -430,6 +431,60 @@ export default function Menu() {
   const [fortuneDismissedDay, setFortuneDismissedDay] = useState<string | null>(null);
   const fortuneAnim = useRef(new Animated.Value(0)).current;
   const fortuneAnimLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  const closeActions = () => {
+    if (deleting) return;
+    setActionOpen(false);
+    setActionPostId(null);
+    setActionPostUid(null);
+  };
+
+  const closeEdit = () => {
+    if (savingEdit) return;
+    setEditOpen(false);
+    setEditingPostId(null);
+    setEditText("");
+    setEditTextColor("#111111");
+    setSavingEdit(false);
+  };
+
+  const closeReply = () => {
+    if (sendingReply) return;
+    setReplyOpen(false);
+    setReplyText("");
+    setReplyingPostId(null);
+    setReplyParentId(null);
+    setReplyParentName("");
+    setReplyTextColor("#111111");
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return;
+
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (actionOpen) {
+          closeActions();
+          return true;
+        }
+        if (editOpen) {
+          closeEdit();
+          return true;
+        }
+        if (replyOpen) {
+          closeReply();
+          return true;
+        }
+        return true;
+      });
+
+      return () => {
+        try {
+          sub.remove();
+        } catch {}
+      };
+    }, [actionOpen, editOpen, replyOpen, deleting, savingEdit, sendingReply])
+  );
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
@@ -980,13 +1035,6 @@ export default function Menu() {
     return feedMode === "mine" ? `${count} posts in your thoughts` : `${count} posts in your feed`;
   }, [posts.length, feedMode]);
 
-  const closeActions = () => {
-    if (deleting) return;
-    setActionOpen(false);
-    setActionPostId(null);
-    setActionPostUid(null);
-  };
-
   const openActionsFor = (p: PostItem) => {
     const uid = (p.uid || "").trim();
     if (!myUid || !uid || uid !== myUid) return;
@@ -1028,15 +1076,6 @@ export default function Menu() {
     setSavingEdit(false);
     setEditOpen(true);
     closeActions();
-  };
-
-  const closeEdit = () => {
-    if (savingEdit) return;
-    setEditOpen(false);
-    setEditingPostId(null);
-    setEditText("");
-    setEditTextColor("#111111");
-    setSavingEdit(false);
   };
 
   const canSaveEdit = useMemo(() => {
@@ -1124,16 +1163,6 @@ export default function Menu() {
     setReplyText("");
     setReplyTextColor("#111111");
     setReplyOpen(true);
-  };
-
-  const closeReply = () => {
-    if (sendingReply) return;
-    setReplyOpen(false);
-    setReplyText("");
-    setReplyingPostId(null);
-    setReplyParentId(null);
-    setReplyParentName("");
-    setReplyTextColor("#111111");
   };
 
   const canSendReply = useMemo(() => {
