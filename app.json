@@ -54,6 +54,9 @@
         "projectId": "6e2aa9ed-8f01-49cc-8119-ad5a867e4a97"
       }
     },
-    "owner": "jexterbarsana"
+    "owner": "jexterbarsana",
+    "updates": {
+      "url": "https://u.expo.dev/6e2aa9ed-8f01-49cc-8119-ad5a867e4a97"
+    }
   }
 }
