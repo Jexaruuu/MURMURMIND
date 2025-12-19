@@ -396,6 +396,12 @@ export default function Menu() {
   const [actionPostUid, setActionPostUid] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editTextColor, setEditTextColor] = useState<string>("#111111");
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const [threadPostId, setThreadPostId] = useState<string | null>(null);
   const [replies, setReplies] = useState<ReplyItem[]>([]);
   const [replyOpen, setReplyOpen] = useState(false);
@@ -577,6 +583,20 @@ export default function Menu() {
     return null;
   };
 
+  const userPhotoVersionFromDoc = (data: any) => {
+    const candidates: any[] = [
+      data?.photoVer,
+      data?.photoUpdatedAtMs,
+      data?.updatedAtMs,
+      toMs(data?.photoUpdatedAt),
+      toMs(data?.updatedAt),
+    ];
+    for (const c of candidates) {
+      if (typeof c === "number" && Number.isFinite(c) && c > 0) return Math.max(0, Math.floor(c));
+    }
+    return 0;
+  };
+
   const uniqueTagForUid = (uidLike: string | null | undefined) => {
     const uid = typeof uidLike === "string" ? uidLike.trim() : "";
     if (!uid) return "";
@@ -620,15 +640,7 @@ export default function Menu() {
       (snap) => {
         const data: any = snap.exists() ? snap.data() : null;
         const nextPhoto = typeof data?.photoUrl === "string" ? data.photoUrl : null;
-        const nextVer =
-          typeof data?.photoVer === "number"
-            ? data.photoVer
-            : typeof data?.photoUpdatedAt === "number"
-            ? data.photoUpdatedAt
-            : typeof data?.updatedAt === "number"
-            ? data.updatedAt
-            : 0;
-
+        const nextVer = userPhotoVersionFromDoc(data);
         const dismissed = typeof data?.fortuneDismissedDay === "string" ? data.fortuneDismissedDay.trim() : null;
 
         setMyPhotoUrl(nextPhoto);
@@ -674,10 +686,17 @@ export default function Menu() {
         setThreadPostId(null);
         setReplies([]);
       }
+
+      if (editingPostId && !next.some((p) => p.id === editingPostId)) {
+        setEditOpen(false);
+        setEditingPostId(null);
+        setEditText("");
+        setEditTextColor("#111111");
+      }
     });
 
     return () => unsub();
-  }, [threadPostId]);
+  }, [threadPostId, editingPostId]);
 
   useEffect(() => {
     if (!threadPostId) {
@@ -737,14 +756,7 @@ export default function Menu() {
         (snap) => {
           const data: any = snap.exists() ? snap.data() : null;
           const next = typeof data?.photoUrl === "string" ? data.photoUrl : null;
-          const nextVer =
-            typeof data?.photoVer === "number"
-              ? data.photoVer
-              : typeof data?.photoUpdatedAt === "number"
-              ? data.photoUpdatedAt
-              : typeof data?.updatedAt === "number"
-              ? data.updatedAt
-              : 0;
+          const nextVer = userPhotoVersionFromDoc(data);
 
           setUserPhotoByUid((prev) => (prev[uid] === next ? prev : { ...prev, [uid]: next }));
           setUserPhotoVerByUid((prev) => {
@@ -957,6 +969,86 @@ export default function Menu() {
       closeActions();
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const openEditPost = (postId: string) => {
+    if (!auth.currentUser || !myUid) {
+      router.replace("/login");
+      return;
+    }
+    const p = posts.find((x) => x.id === postId) || null;
+    if (!p) return;
+    const owner = (p.uid || "").trim();
+    if (!owner || owner !== myUid) return;
+
+    setEditingPostId(postId);
+    setEditText(typeof p.text === "string" ? p.text : "");
+    setEditTextColor(typeof p.textColor === "string" && p.textColor.trim() ? p.textColor.trim() : "#111111");
+    setSavingEdit(false);
+    setEditOpen(true);
+    closeActions();
+  };
+
+  const closeEdit = () => {
+    if (savingEdit) return;
+    setEditOpen(false);
+    setEditingPostId(null);
+    setEditText("");
+    setEditTextColor("#111111");
+    setSavingEdit(false);
+  };
+
+  const canSaveEdit = useMemo(() => {
+    const t = editText.trim();
+    return !!auth.currentUser && !!myUid && !!editingPostId && !savingEdit && t.length > 0 && t.length <= 280;
+  }, [editText, editingPostId, savingEdit, myUid]);
+
+  const saveEditPost = async () => {
+    if (!auth.currentUser || !myUid) {
+      router.replace("/login");
+      return;
+    }
+    if (!editingPostId) return;
+
+    const current = posts.find((x) => x.id === editingPostId) || null;
+    if (!current) return;
+    const owner = (current.uid || "").trim();
+    if (!owner || owner !== myUid) return;
+
+    const t = editText.trim();
+    if (!t || t.length > 280) return;
+
+    const c = (editTextColor || "#111111").trim() || "#111111";
+
+    setSavingEdit(true);
+
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id !== editingPostId
+          ? p
+          : {
+              ...p,
+              text: t,
+              textColor: c,
+            }
+      )
+    );
+
+    try {
+      await setDoc(
+        doc(db, "posts", editingPostId),
+        {
+          text: t,
+          textColor: c,
+          updatedAt: serverTimestamp(),
+          updatedAtMs: Date.now(),
+        } as any,
+        { merge: true }
+      );
+      closeEdit();
+    } catch {
+      setSavingEdit(false);
     }
   };
 
@@ -1337,6 +1429,15 @@ export default function Menu() {
     setTIndex((i) => i + 1);
   };
 
+  const editingTitle = useMemo(() => {
+    if (!editingPostId) return "Your post";
+    const p = posts.find((x) => x.id === editingPostId) || null;
+    const ownerUid = (p?.uid || "").trim();
+    if (!ownerUid) return "Your post";
+    const tag = uniqueTagForUid(ownerUid);
+    return tag ? `Your post • ${tag}` : "Your post";
+  }, [editingPostId, posts]);
+
   return (
     <ThemedView style={styles.container}>
       <StatusBar style="light" backgroundColor="#000" translucent />
@@ -1543,6 +1644,22 @@ export default function Menu() {
         <View style={styles.actionWrap}>
           <Pressable style={styles.actionBackdrop} onPress={closeActions} />
           <View style={styles.actionCard}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && styles.pressed,
+                deleting && styles.actionBtnDisabled,
+                (!myUid || !actionPostId || actionPostUid !== myUid) && styles.actionBtnDisabled,
+              ]}
+              onPress={() => {
+                if (!myUid || !actionPostId || actionPostUid !== myUid) return;
+                openEditPost(actionPostId);
+              }}
+              disabled={deleting || !myUid || !actionPostId || actionPostUid !== myUid}
+            >
+              <ThemedText style={styles.actionEditText}>Edit post</ThemedText>
+            </Pressable>
+
             <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed, deleting && styles.actionBtnDisabled]} onPress={deleteMyPost} disabled={deleting}>
               <ThemedText style={styles.actionDeleteText}>{deleting ? "Deleting..." : "Delete post"}</ThemedText>
             </Pressable>
@@ -1550,6 +1667,76 @@ export default function Menu() {
             <Pressable style={({ pressed }) => [styles.actionBtn, styles.actionCancelBtn, pressed && styles.pressed]} onPress={closeActions}>
               <ThemedText style={styles.actionCancelText}>Cancel</ThemedText>
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal transparent visible={editOpen} animationType="fade" onRequestClose={closeEdit} statusBarTranslucent presentationStyle="overFullScreen">
+        <View style={styles.replyModalWrap}>
+          <Pressable style={styles.replyBackdropPress} onPress={closeEdit} />
+          <View style={styles.replyModalCard}>
+            <View style={styles.replyModalTop}>
+              <View style={styles.replyModalDot} />
+            </View>
+
+            <View style={styles.replyModalHead}>
+              <View style={styles.replyTitleWrap}>
+                <ThemedText style={styles.replyModalKicker}>Editing</ThemedText>
+                <ThemedText style={styles.replyModalTitle} numberOfLines={1}>
+                  {editingTitle}
+                </ThemedText>
+              </View>
+
+              <Pressable style={({ pressed }) => [styles.replyModalX, pressed && styles.pressed]} onPress={closeEdit}>
+                <ThemedText style={styles.replyModalXText}>✕</ThemedText>
+              </Pressable>
+            </View>
+
+            <View style={styles.replyInputWrap}>
+              <View style={styles.replyColorRow}>
+                <ThemedText style={styles.replyColorLbl}>Choose Font Color:</ThemedText>
+                <View style={styles.replyColorSwatchesWrap}>
+                  {REPLY_TEXT_COLORS.map((c) => {
+                    const selected = editTextColor === c;
+                    return (
+                      <Pressable
+                        key={c}
+                        onPress={() => setEditTextColor(c)}
+                        style={({ pressed }) => [styles.replyColorSwatch, { backgroundColor: c }, selected && styles.replyColorSwatchSelected, pressed && styles.pressed]}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={styles.replyDivider} />
+
+              <TextInput
+                value={editText}
+                onChangeText={setEditText}
+                placeholder="Edit your post..."
+                placeholderTextColor="#9ca3af"
+                style={[styles.replyInput, { color: editTextColor }]}
+                multiline
+                maxLength={280}
+                textAlignVertical="top"
+              />
+
+              <View style={styles.replyMetaRow}>
+                <ThemedText style={styles.replyMetaText}>{editText.trim().length}/280</ThemedText>
+                <View style={{ flex: 1 }} />
+                <Pressable style={({ pressed }) => [styles.replyCancelBtn, pressed && styles.pressed]} onPress={closeEdit} disabled={savingEdit}>
+                  <ThemedText style={styles.replyCancelText}>Cancel</ThemedText>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.replySendBtn, pressed && styles.pressed, !canSaveEdit && styles.replySendBtnDisabled]}
+                  onPress={saveEditPost}
+                  disabled={!canSaveEdit}
+                >
+                  <ThemedText style={styles.replySendText}>{savingEdit ? "Saving..." : "Save"}</ThemedText>
+                </Pressable>
+              </View>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1897,6 +2084,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   actionBtnDisabled: { opacity: 0.6 },
+  actionEditText: { color: "#111", fontSize: 13, letterSpacing: 0.3, fontFamily: "Poppins_600SemiBold" },
   actionDeleteText: { color: "#b91c1c", fontSize: 13, letterSpacing: 0.3, fontFamily: "Poppins_600SemiBold" },
   actionCancelBtn: { backgroundColor: "#111", borderColor: "#111", marginBottom: 40 },
   actionCancelText: { color: "white", fontSize: 13, letterSpacing: 0.3, fontFamily: "Poppins_600SemiBold" },
