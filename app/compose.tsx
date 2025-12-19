@@ -521,22 +521,24 @@ export default function Compose() {
 
               <View style={styles.textColorRow}>
                 <ThemedText style={styles.textColorLbl}>Choose Font Color:</ThemedText>
-                <View style={{ flex: 1 }} />
-                {TEXT_COLORS.map((c) => {
-                  const selected = textColor === c;
-                  return (
-                    <Pressable
-                      key={c}
-                      onPress={() => setTextColor(c)}
-                      style={({ pressed }) => [
-                        styles.textColorSwatch,
-                        { backgroundColor: c },
-                        selected && styles.textColorSwatchSelected,
-                        pressed && styles.pressed,
-                      ]}
-                    />
-                  );
-                })}
+
+                <View style={styles.textColorSwatchesWrap}>
+                  {TEXT_COLORS.map((c) => {
+                    const selected = textColor === c;
+                    return (
+                      <Pressable
+                        key={c}
+                        onPress={() => setTextColor(c)}
+                        style={({ pressed }) => [
+                          styles.textColorSwatch,
+                          { backgroundColor: c },
+                          selected && styles.textColorSwatchSelected,
+                          pressed && styles.pressed,
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
               </View>
 
               {mediaType === "image" && !!mediaUrl && (
@@ -747,11 +749,12 @@ const styles = StyleSheet.create({
   textColorRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     marginTop: 10,
     flexWrap: "wrap",
   },
-  textColorLbl: { fontSize: 12, color: "#6b7280" },
+  textColorLbl: { fontSize: 12, color: "#6b7280", marginRight: 2 },
+  textColorSwatchesWrap: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   textColorSwatch: {
     width: 22,
     height: 22,

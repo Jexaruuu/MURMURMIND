@@ -162,6 +162,7 @@ const ALIAS_NOUN = [
 type PostItem = {
   id: string;
   text: string;
+  textColor?: string | null;
   uid?: string | null;
   username?: string | null;
   photoUrl?: string | null;
@@ -176,6 +177,7 @@ type ReplyItem = {
   postId: string;
   parentId: string | null;
   text: string;
+  textColor?: string | null;
   uid: string | null;
   username: string | null;
   photoUrl: string | null;
@@ -207,6 +209,12 @@ export default function Menu() {
   const [replyParentId, setReplyParentId] = useState<string | null>(null);
   const [replyParentName, setReplyParentName] = useState<string>("");
   const [sendingReply, setSendingReply] = useState(false);
+
+  const REPLY_TEXT_COLORS = useMemo(
+    () => ["#111111", "#EF4444", "#F97316", "#F59E0B", "#10B981", "#06B6D4", "#3B82F6", "#6366F1", "#A855F7", "#EC4899", "#22C55E"],
+    []
+  );
+  const [replyTextColor, setReplyTextColor] = useState<string>("#111111");
 
   const [nowMs, setNowMs] = useState(Date.now());
 
@@ -320,6 +328,7 @@ export default function Menu() {
           return {
             id: d.id,
             text: typeof data?.text === "string" ? data.text : "",
+            textColor: typeof data?.textColor === "string" ? data.textColor : null,
             uid: typeof data?.uid === "string" ? data.uid : null,
             username: typeof data?.username === "string" ? data.username : null,
             photoUrl: typeof data?.photoUrl === "string" ? data.photoUrl : null,
@@ -363,6 +372,7 @@ export default function Menu() {
               postId: threadPostId,
               parentId: typeof data?.parentId === "string" ? data.parentId : null,
               text: typeof data?.text === "string" ? data.text : "",
+              textColor: typeof data?.textColor === "string" ? data.textColor : null,
               uid: typeof data?.uid === "string" ? data.uid : null,
               username: typeof data?.username === "string" ? data.username : null,
               photoUrl: typeof data?.photoUrl === "string" ? data.photoUrl : null,
@@ -499,6 +509,7 @@ export default function Menu() {
     setReplyParentId(null);
     setReplyParentName((username || "").trim() || "Anonymous");
     setReplyText("");
+    setReplyTextColor("#111111");
     setReplyOpen(true);
   };
 
@@ -512,6 +523,7 @@ export default function Menu() {
     setReplyParentId(r.id);
     setReplyParentName((r.username || "").trim() || "Someone");
     setReplyText("");
+    setReplyTextColor("#111111");
     setReplyOpen(true);
   };
 
@@ -522,6 +534,7 @@ export default function Menu() {
     setReplyingPostId(null);
     setReplyParentId(null);
     setReplyParentName("");
+    setReplyTextColor("#111111");
   };
 
   const canSendReply = useMemo(() => {
@@ -547,6 +560,7 @@ export default function Menu() {
         username: quickName,
         photoUrl: myPhotoUrl || null,
         text: t,
+        textColor: replyTextColor,
         parentId: replyParentId || null,
         createdAt: serverTimestamp(),
         createdAtMs: Date.now(),
@@ -613,6 +627,8 @@ export default function Menu() {
       const liveOtherPhoto = !isMe && r.uid ? userPhotoByUid[String(r.uid)] || null : null;
       const bestPhoto = (isMe ? myPhotoUrl : null) || liveOtherPhoto || r.photoUrl || null;
 
+      const replyColor = typeof r.textColor === "string" && r.textColor.trim() ? r.textColor.trim() : "#111";
+
       return (
         <View key={r.id} style={[styles.replyRow, depth > 0 && { marginLeft: Math.min(44, depth * 14) }]}>
           <Image source={sourceFor(bestPhoto)} style={styles.replyAvatar} contentFit="cover" />
@@ -629,7 +645,7 @@ export default function Menu() {
               </Pressable>
             </View>
 
-            <ThemedText style={styles.replyText}>{r.text}</ThemedText>
+            <ThemedText style={[styles.replyText, { color: replyColor }]}>{r.text}</ThemedText>
 
             {renderReplyList(postId, r.id, depth + 1)}
           </View>
@@ -773,6 +789,8 @@ export default function Menu() {
               const displayName = aliasForUid(p.uid) || "Anonymous";
               const handle = handleForUid(p.uid);
 
+              const postTextColor = typeof p.textColor === "string" && p.textColor.trim() ? p.textColor.trim() : "#111";
+
               return (
                 <View key={p.id} style={styles.post}>
                   <View style={styles.postHead}>
@@ -794,7 +812,7 @@ export default function Menu() {
                     )}
                   </View>
 
-                  {!!p.text.trim() && <ThemedText style={styles.postText}>{p.text}</ThemedText>}
+                  {!!p.text.trim() && <ThemedText style={[styles.postText, { color: postTextColor }]}>{p.text}</ThemedText>}
 
                   {renderPostMedia(p)}
 
@@ -903,12 +921,30 @@ export default function Menu() {
             </View>
 
             <View style={styles.replyInputWrap}>
+              <View style={styles.replyColorRow}>
+                <ThemedText style={styles.replyColorLbl}>Choose Font Color:</ThemedText>
+                <View style={styles.replyColorSwatchesWrap}>
+                  {REPLY_TEXT_COLORS.map((c) => {
+                    const selected = replyTextColor === c;
+                    return (
+                      <Pressable
+                        key={c}
+                        onPress={() => setReplyTextColor(c)}
+                        style={({ pressed }) => [styles.replyColorSwatch, { backgroundColor: c }, selected && styles.replyColorSwatchSelected, pressed && styles.pressed]}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={styles.replyDivider} />
+
               <TextInput
                 value={replyText}
                 onChangeText={setReplyText}
                 placeholder="Write your reply..."
                 placeholderTextColor="#9ca3af"
-                style={styles.replyInput}
+                style={[styles.replyInput, { color: replyTextColor }]}
                 multiline
                 maxLength={280}
                 textAlignVertical="top"
@@ -1215,6 +1251,19 @@ const styles = StyleSheet.create({
   replyModalXText: { fontSize: 14, color: "#111" },
 
   replyInputWrap: { borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 16, padding: 12, backgroundColor: "white" },
+
+  replyColorRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 },
+  replyColorLbl: { fontSize: 12, color: "#6b7280", marginRight: 2 },
+  replyColorSwatchesWrap: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  replyColorSwatch: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: "#e5e7eb" },
+  replyColorSwatchSelected: { borderWidth: 2, borderColor: "#111" },
+
+  replyDivider: {
+    height: 1,
+    backgroundColor: "#e5e7eb",
+    marginBottom: 10,
+  },
+
   replyInput: { minHeight: 120, fontSize: 14, color: "#111", lineHeight: 20 },
 
   replyMetaRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
