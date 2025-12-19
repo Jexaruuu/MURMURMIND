@@ -20,6 +20,8 @@ const MENU_ICON_SIZE = 18;
 
 const ASSET_PREFIX = "asset:";
 
+const BOTTOM_NAV_GAP =  -10;
+
 const AVATAR_CHOICES = [
   { key: `${ASSET_PREFIX}murmurblack`, label: "Bla", src: require("@/assets/images/murmurblack.png") },
   { key: `${ASSET_PREFIX}murmuryellow`, label: "Yel", src: require("@/assets/images/murmuryellow.png") },
@@ -566,6 +568,9 @@ export default function ProfileMenuSheet({
   const headerTitle = useMemo(() => (editOpen ? "Edit profile" : "Menu"), [editOpen]);
   const alias = useMemo(() => aliasForUid(uid), [uid]);
 
+  const bottomClearance = Math.max(insets.bottom, 12) + BOTTOM_NAV_GAP;
+  const scrollBottomPad = 18 + bottomClearance;
+
   if (!visible) return null;
   if (!fontsLoaded) return null;
 
@@ -581,7 +586,7 @@ export default function ProfileMenuSheet({
             {
               width: MENU_WIDTH,
               paddingTop: 10 + Math.max(insets.top, 12),
-              paddingBottom: 14 + Math.max(insets.bottom, 12),
+              paddingBottom: 14 + bottomClearance,
               transform: [{ translateX: slideX }],
             },
           ]}
@@ -675,7 +680,13 @@ export default function ProfileMenuSheet({
               </View>
             </>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.editPad}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.editScroll}
+              contentContainerStyle={[styles.editPad, { paddingBottom: scrollBottomPad }]}
+              scrollIndicatorInsets={{ bottom: bottomClearance }}
+              contentInset={{ bottom: bottomClearance } as any}
+            >
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardHeaderLeft}>
@@ -804,7 +815,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     right: 0,
-    height: "95%",
+    height: "100%",
     backgroundColor: "#000000",
     borderLeftWidth: 1,
     borderColor: "#000000",
@@ -899,6 +910,8 @@ const styles = StyleSheet.create({
 
   logoutText: { color: "#ff4d4d", fontFamily: "Poppins_500Medium" },
   logoutBadge: { backgroundColor: "#1a0b0b", borderColor: "#3a1a1a" },
+
+  editScroll: { flex: 1 },
 
   editPad: { paddingBottom: 26 },
   card: {
