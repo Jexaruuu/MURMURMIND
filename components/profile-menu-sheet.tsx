@@ -1,6 +1,8 @@
 import { ThemedText } from "@/components/themed-text";
 import { auth, db } from "@/firebase";
+import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from "@expo-google-fonts/poppins";
 import { Ionicons } from "@expo/vector-icons";
+import { useFonts } from "expo-font";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
@@ -32,6 +34,178 @@ const AVATAR_ASSETS: Record<string, any> = AVATAR_CHOICES.reduce((acc: any, a) =
   return acc;
 }, {});
 
+const ALIAS_ADJ = [
+  "Skibidi",
+  "Sigma",
+  "Rizz",
+  "Based",
+  "Sus",
+  "NoCap",
+  "Bussin",
+  "Delulu",
+  "NPC",
+  "Ohio",
+  "MainCharacter",
+  "VibeCheck",
+  "GlowUp",
+  "Slay",
+  "Goated",
+  "Yeet",
+  "Lowkey",
+  "Highkey",
+  "RentFree",
+  "Core",
+  "Giga",
+  "Chad",
+  "Aura",
+  "Drip",
+  "Flex",
+  "W",
+  "L",
+  "IYKYK",
+  "POV",
+  "Lore",
+  "Tea",
+  "Canon",
+  "Ratio",
+  "Cringe",
+  "Ick",
+  "Feral",
+  "Unhinged",
+  "Chaotic",
+  "LockedIn",
+  "Cooked",
+  "Banger",
+  "Fire",
+  "GG",
+  "AFK",
+  "IRL",
+  "TouchGrass",
+  "Lag",
+  "Ping",
+  "Glitchy",
+  "Pixel",
+  "Neuron",
+  "Synapse",
+  "Cortex",
+  "Brainrot",
+  "GoblinMode",
+  "Yap",
+  "Bet",
+  "Bruh",
+  "Sheesh",
+  "Mood",
+  "Stan",
+  "Simp",
+  "Ate",
+  "Vibin",
+  "Clapped",
+  "Woke",
+  "Zoomer",
+  "ChronicallyOnline",
+  "TikTokified",
+  "Algorithmic",
+];
+
+const ALIAS_NOUN = [
+  "Rizzler",
+  "NPC",
+  "Yapper",
+  "Viber",
+  "Enjoyer",
+  "Gremlin",
+  "Goblin",
+  "Legend",
+  "MemeLord",
+  "ChaosAgent",
+  "Bestie",
+  "Captain",
+  "Hero",
+  "Villain",
+  "Streamer",
+  "Coder",
+  "Wizard",
+  "Ninja",
+  "Knight",
+  "Pirate",
+  "Robot",
+  "Alien",
+  "Cyborg",
+  "Glitch",
+  "Byte",
+  "Pixel",
+  "Sprite",
+  "Comet",
+  "Meteor",
+  "Vortex",
+  "Portal",
+  "Dream",
+  "Thought",
+  "Idea",
+  "Spark",
+  "Signal",
+  "Neuron",
+  "Synapse",
+  "Cortex",
+  "Panda",
+  "Otter",
+  "Fox",
+  "Koala",
+  "Cat",
+  "Dolphin",
+  "Bunny",
+  "Turtle",
+  "Hedgehog",
+  "Chick",
+  "Raccoon",
+  "Penguin",
+  "Tiger",
+  "Sloth",
+  "Llama",
+  "Bear",
+  "Sparrow",
+  "Pup",
+  "Kitten",
+  "Dragon",
+  "Goat",
+  "Bard",
+  "Gamer",
+  "Snack",
+  "Vibe",
+  "Timeline",
+  "PlotTwist",
+  "SideQuest",
+  "HotTake",
+  "MoodBoard",
+];
+
+const hashStr = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+};
+
+const uniqueTagForUid = (uidLike: string | null | undefined) => {
+  const uid = typeof uidLike === "string" ? uidLike.trim() : "";
+  if (!uid) return "";
+  const a = hashStr(`tagA|${uid}`).toString(36).padStart(6, "0");
+  const b = hashStr(`tagB|${uid}`).toString(36).padStart(6, "0");
+  return (a + b).slice(0, 8);
+};
+
+const aliasForUid = (uidLike: string | null | undefined) => {
+  const uid = typeof uidLike === "string" ? uidLike.trim() : "";
+  if (!uid) return "Brainrot Guest";
+  const seed = hashStr(`alias|${uid}`);
+  const a = ALIAS_ADJ[seed % ALIAS_ADJ.length];
+  const n = ALIAS_NOUN[Math.floor(seed / ALIAS_ADJ.length) % ALIAS_NOUN.length];
+  const tag = uniqueTagForUid(uid);
+  return `${a} ${n} • ${tag}`;
+};
+
 export default function ProfileMenuSheet({
   open,
   onClose,
@@ -41,12 +215,21 @@ export default function ProfileMenuSheet({
 }) {
   const insets = useSafeAreaInsets();
 
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+  });
+
   const [visible, setVisible] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  const [uid, setUid] = useState<string | null>(null);
 
   const [username, setUsername] = useState("Guest");
   const [userEmail, setUserEmail] = useState<string>("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoVer, setPhotoVer] = useState<number>(0);
   const [photoBroken, setPhotoBroken] = useState(false);
 
   const [editName, setEditName] = useState("");
@@ -67,6 +250,7 @@ export default function ProfileMenuSheet({
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   const lastServerPhoto = useRef<string | null>(null);
+  const lastServerPhotoVer = useRef<number>(0);
 
   const assetFor = (v: string | null | undefined) => {
     if (!v) return null;
@@ -76,8 +260,23 @@ export default function ProfileMenuSheet({
     return AVATAR_ASSETS[k] || null;
   };
 
+  const isHttpUrl = (v: string | null | undefined) => {
+    if (!v) return false;
+    const s = String(v).trim().toLowerCase();
+    return s.startsWith("http://") || s.startsWith("https://");
+  };
+
+  const withVer = (u: string, ver: number) => {
+    const s = u.trim();
+    if (!s) return s;
+    if (!isHttpUrl(s)) return s;
+    const glue = s.includes("?") ? "&" : "?";
+    return `${s}${glue}v=${Math.max(0, Math.floor(ver || 0))}`;
+  };
+
   const avatarAsset = assetFor(photoUrl);
-  const avatarSource = avatarAsset ? avatarAsset : photoUrl && !photoBroken ? { uri: photoUrl } : fallbackAvatar;
+  const avatarUri = !avatarAsset && photoUrl && !photoBroken ? withVer(photoUrl, photoVer) : null;
+  const avatarSource = avatarAsset ? avatarAsset : avatarUri ? { uri: avatarUri } : fallbackAvatar;
   const avatarCanError = !avatarAsset && !!photoUrl;
 
   const editAsset = assetFor(editPhoto);
@@ -93,12 +292,6 @@ export default function ProfileMenuSheet({
   const photoChanged = (editPhoto || null) !== (basePhoto || null);
 
   const hasChanges = (nameChanged || emailChanged || photoChanged || passwordChanged) && passwordReady;
-
-  const isHttpUrl = (v: string | null | undefined) => {
-    if (!v) return false;
-    const s = String(v).trim().toLowerCase();
-    return s.startsWith("http://") || s.startsWith("https://");
-  };
 
   const friendlyError = (err: any) => {
     const code = typeof err?.code === "string" ? err.code : "";
@@ -156,11 +349,16 @@ export default function ProfileMenuSheet({
     const u = auth.currentUser;
     setPhotoBroken(false);
 
+    const nextUid = u?.uid ? String(u.uid) : null;
+    setUid(nextUid);
+
     if (!u) {
       setUsername("Guest");
       setUserEmail("");
       setPhotoUrl(null);
+      setPhotoVer(0);
       lastServerPhoto.current = null;
+      lastServerPhotoVer.current = 0;
       return;
     }
 
@@ -183,14 +381,25 @@ export default function ProfileMenuSheet({
     const unsub = onSnapshot(doc(db, "users", u.uid), (snap) => {
       const data: any = snap.exists() ? snap.data() : null;
       const fromFs = typeof data?.photoUrl === "string" ? data.photoUrl : null;
+      const fromVer =
+        typeof data?.photoVer === "number"
+          ? data.photoVer
+          : typeof data?.photoUpdatedAt === "number"
+          ? data.photoUpdatedAt
+          : typeof data?.updatedAt === "number"
+          ? data.updatedAt
+          : 0;
+
       const authPhoto = typeof u.photoURL === "string" && u.photoURL.trim() ? u.photoURL.trim() : null;
       const next = fromFs || authPhoto || null;
 
       lastServerPhoto.current = next;
+      lastServerPhotoVer.current = Math.max(0, Math.floor(fromVer || 0));
 
       if (!editOpen) {
         setPhotoBroken(false);
         setPhotoUrl(next);
+        setPhotoVer(lastServerPhotoVer.current);
       }
     });
 
@@ -203,6 +412,7 @@ export default function ProfileMenuSheet({
     if (lastServerPhoto.current !== null || photoUrl !== null) {
       setPhotoBroken(false);
       setPhotoUrl(lastServerPhoto.current);
+      setPhotoVer(lastServerPhotoVer.current);
     }
   }, [editOpen, visible]);
 
@@ -278,10 +488,15 @@ export default function ProfileMenuSheet({
     setSaving(true);
 
     try {
-      const fsPatch: any = { updatedAt: Date.now() };
+      const now = Date.now();
+      const fsPatch: any = { updatedAt: now };
       if (nextName && !same(nextName, baseName)) fsPatch.name = nextName;
       if (nextEmail && !same(nextEmail, baseEmail)) fsPatch.email = nextEmail;
-      if (photoChanged) fsPatch.photoUrl = editPhoto || null;
+      if (photoChanged) {
+        fsPatch.photoUrl = editPhoto || null;
+        fsPatch.photoVer = now;
+        fsPatch.photoUpdatedAt = now;
+      }
 
       await setDoc(doc(db, "users", u.uid), fsPatch, { merge: true });
 
@@ -304,8 +519,10 @@ export default function ProfileMenuSheet({
       if (photoChanged) {
         const finalPhoto = editPhoto || null;
         lastServerPhoto.current = finalPhoto;
+        lastServerPhotoVer.current = now;
         setPhotoBroken(false);
         setPhotoUrl(finalPhoto);
+        setPhotoVer(now);
       }
 
       if (didPasswordChange) {
@@ -329,8 +546,10 @@ export default function ProfileMenuSheet({
   };
 
   const headerTitle = useMemo(() => (editOpen ? "Edit profile" : "Menu"), [editOpen]);
+  const alias = useMemo(() => aliasForUid(uid), [uid]);
 
   if (!visible) return null;
+  if (!fontsLoaded) return null;
 
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={close} statusBarTranslucent presentationStyle="overFullScreen">
@@ -382,7 +601,15 @@ export default function ProfileMenuSheet({
                   }}
                 />
                 <View style={styles.headerText}>
-                  <ThemedText style={styles.headerName}>{username}</ThemedText>
+                  <View style={styles.nameRow}>
+                    <ThemedText style={styles.headerName} numberOfLines={1}>
+                      {username}
+                    </ThemedText>
+                    <ThemedText style={styles.nameSep}>|</ThemedText>
+                    <ThemedText style={styles.headerAlias} numberOfLines={1}>
+                      {alias}
+                    </ThemedText>
+                  </View>
 
                   <Pressable
                     onPress={() => {
@@ -550,7 +777,7 @@ const styles = StyleSheet.create({
 
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 },
   topLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { fontSize: 14, color: "#111", letterSpacing: 0.4 },
+  title: { fontSize: 14, color: "#111", letterSpacing: 0.4, fontFamily: "Poppins_500Medium" },
 
   backBtn: {
     width: 30,
@@ -562,7 +789,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  backIcon: { fontSize: 20, marginTop: -2, color: "#111" },
+  backIcon: { fontSize: 20, marginTop: -2, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
   closeBtn: {
     width: 36,
@@ -574,15 +801,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e7eb",
   },
-  closeIcon: { fontSize: 16, color: "#111" },
+  closeIcon: { fontSize: 16, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 2, paddingVertical: 10 },
   headerAvatar: { width: 44, height: 44, borderRadius: 12, backgroundColor: "#e5e7eb" },
-  headerText: { marginLeft: 12, flex: 1 },
-  headerName: { fontSize: 16, color: "#111" },
+  headerText: { marginLeft: 12, flex: 1, minWidth: 0 },
+
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
+  headerName: { fontSize: 16, color: "#111", fontFamily: "Poppins_600SemiBold", maxWidth: 140 },
+  nameSep: { fontSize: 13, color: "#9ca3af", fontFamily: "Poppins_400Regular" },
+  headerAlias: { fontSize: 12, color: "#6b7280", fontFamily: "Poppins_400Regular", flex: 1, minWidth: 0 },
 
   editLink: { marginTop: 6, alignSelf: "flex-start" },
-  editLinkText: { fontSize: 12, color: "#111", textDecorationLine: "underline" },
+  editLinkText: { fontSize: 12, color: "#111", textDecorationLine: "underline", fontFamily: "Poppins_400Regular" },
 
   divider: { height: 1, backgroundColor: "rgba(0,0,0,0.06)", marginVertical: 10 },
 
@@ -612,10 +843,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  itemText: { fontSize: 14, color: "#111" },
-  chev: { fontSize: 18, color: "#9ca3af", marginTop: -1 },
+  itemText: { fontSize: 14, color: "#111", fontFamily: "Poppins_500Medium" },
+  chev: { fontSize: 18, color: "#9ca3af", marginTop: -1, fontFamily: "Poppins_600SemiBold" },
 
-  logoutText: { color: "#b91c1c" },
+  logoutText: { color: "#b91c1c", fontFamily: "Poppins_500Medium" },
   logoutBadge: { backgroundColor: "#fef2f2", borderColor: "#fecaca" },
 
   pressed: { opacity: 0.75 },
@@ -629,10 +860,10 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     marginBottom: 10,
   },
-  cardTitle: { fontSize: 13, color: "#111" },
+  cardTitle: { fontSize: 13, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
   field: { marginTop: 10 },
-  label: { fontSize: 12, color: "#6b7280", marginBottom: 6 },
+  label: { fontSize: 12, color: "#6b7280", marginBottom: 6, fontFamily: "Poppins_400Regular" },
 
   inputWrap: {
     borderWidth: 1,
@@ -642,7 +873,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
   },
-  input: { fontSize: 14, color: "#111" },
+  input: { fontSize: 14, color: "#111", fontFamily: "Poppins_400Regular" },
 
   photoRow: {
     flexDirection: "row",
@@ -657,8 +888,8 @@ const styles = StyleSheet.create({
   },
   editAvatar: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#e5e7eb" },
   photoMeta: { flex: 1 },
-  photoTitle: { fontSize: 13, color: "#111" },
-  photoSub: { fontSize: 12, color: "#6b7280", marginTop: 2 },
+  photoTitle: { fontSize: 13, color: "#111", fontFamily: "Poppins_600SemiBold" },
+  photoSub: { fontSize: 12, color: "#6b7280", marginTop: 2, fontFamily: "Poppins_400Regular" },
 
   grid: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 10 },
   avatarOption: {
@@ -675,7 +906,7 @@ const styles = StyleSheet.create({
   },
   avatarOptionSelected: { borderColor: "#111", borderWidth: 2 },
   avatarImg: { width: 34, height: 34, borderRadius: 12, backgroundColor: "#e5e7eb" },
-  avatarLbl: { fontSize: 12, color: "#111" },
+  avatarLbl: { fontSize: 12, color: "#111", fontFamily: "Poppins_500Medium" },
 
   primary: {
     marginTop: 12,
@@ -687,9 +918,9 @@ const styles = StyleSheet.create({
   },
   primaryPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
   primaryDisabled: { opacity: 0.5 },
-  primaryText: { color: "white", fontSize: 12, letterSpacing: 0.6 },
+  primaryText: { color: "white", fontSize: 12, letterSpacing: 0.6, fontFamily: "Poppins_600SemiBold" },
 
-  notice: { marginTop: 10, fontSize: 12, lineHeight: 18 },
+  notice: { marginTop: 10, fontSize: 12, lineHeight: 18, fontFamily: "Poppins_400Regular" },
   ok: { color: "#16a34a" },
   bad: { color: "#b91c1c" },
   muted: { color: "#6b7280" },

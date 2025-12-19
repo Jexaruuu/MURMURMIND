@@ -5,6 +5,8 @@ import { ThemedView } from "@/components/themed-view";
 import { auth, db } from "@/firebase";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from "@expo-google-fonts/poppins";
+import { useFonts } from "expo-font";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -114,29 +116,118 @@ const AVATAR_ASSETS: Record<string, any> = {
 };
 
 const ALIAS_ADJ = [
-  "Sunny",
-  "Bubbly",
-  "Chill",
-  "Cosmic",
-  "Silly",
-  "Brave",
-  "Witty",
-  "Gentle",
-  "Curious",
-  "Sparkly",
-  "Mischievous",
-  "Dreamy",
-  "Peppy",
-  "Goofy",
-  "Clever",
-  "Kind",
-  "Zippy",
-  "Cozy",
-  "Nimble",
-  "Happy",
+  "Skibidi",
+  "Sigma",
+  "Rizz",
+  "Based",
+  "Sus",
+  "NoCap",
+  "Bussin",
+  "Delulu",
+  "NPC",
+  "Ohio",
+  "MainCharacter",
+  "VibeCheck",
+  "GlowUp",
+  "Slay",
+  "Goated",
+  "Yeet",
+  "Lowkey",
+  "Highkey",
+  "RentFree",
+  "Core",
+  "Giga",
+  "Chad",
+  "Aura",
+  "Drip",
+  "Flex",
+  "W",
+  "L",
+  "IYKYK",
+  "POV",
+  "Lore",
+  "Tea",
+  "Canon",
+  "Ratio",
+  "Cringe",
+  "Ick",
+  "Feral",
+  "Unhinged",
+  "Chaotic",
+  "LockedIn",
+  "Cooked",
+  "Banger",
+  "Fire",
+  "GG",
+  "AFK",
+  "IRL",
+  "TouchGrass",
+  "Lag",
+  "Ping",
+  "Glitchy",
+  "Pixel",
+  "Neuron",
+  "Synapse",
+  "Cortex",
+  "Brainrot",
+  "GoblinMode",
+  "Yap",
+  "Bet",
+  "Bruh",
+  "Sheesh",
+  "Mood",
+  "Stan",
+  "Simp",
+  "Ate",
+  "Vibin",
+  "Clapped",
+  "Woke",
+  "Zoomer",
+  "ChronicallyOnline",
+  "TikTokified",
+  "Algorithmic",
 ];
 
 const ALIAS_NOUN = [
+  "Rizzler",
+  "NPC",
+  "Yapper",
+  "Viber",
+  "Enjoyer",
+  "Gremlin",
+  "Goblin",
+  "Legend",
+  "MemeLord",
+  "ChaosAgent",
+  "Bestie",
+  "Captain",
+  "Hero",
+  "Villain",
+  "Streamer",
+  "Coder",
+  "Wizard",
+  "Ninja",
+  "Knight",
+  "Pirate",
+  "Robot",
+  "Alien",
+  "Cyborg",
+  "Glitch",
+  "Byte",
+  "Pixel",
+  "Sprite",
+  "Comet",
+  "Meteor",
+  "Vortex",
+  "Portal",
+  "Dream",
+  "Thought",
+  "Idea",
+  "Spark",
+  "Signal",
+  "Neuron",
+  "Synapse",
+  "Cortex",
   "Panda",
   "Otter",
   "Fox",
@@ -157,6 +248,16 @@ const ALIAS_NOUN = [
   "Pup",
   "Kitten",
   "Dragon",
+  "Goat",
+  "Bard",
+  "Gamer",
+  "Snack",
+  "Vibe",
+  "Timeline",
+  "PlotTwist",
+  "SideQuest",
+  "HotTake",
+  "MoodBoard",
 ];
 
 type PostItem = {
@@ -184,7 +285,15 @@ type ReplyItem = {
   createdAt: number | null;
 };
 
+type PhotoState = { url: string | null; ver: number };
+
 export default function Menu() {
+  useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+  });
+
   const [tIndex, setTIndex] = useState(0);
   const thought = useMemo(() => THOUGHTS[tIndex % THOUGHTS.length], [tIndex]);
   const insets = useSafeAreaInsets();
@@ -192,8 +301,10 @@ export default function Menu() {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [myUid, setMyUid] = useState<string | null>(auth.currentUser?.uid ? String(auth.currentUser.uid) : null);
   const [myPhotoUrl, setMyPhotoUrl] = useState<string | null>(null);
+  const [myPhotoVer, setMyPhotoVer] = useState<number>(0);
 
   const [userPhotoByUid, setUserPhotoByUid] = useState<Record<string, string | null>>({});
+  const [userPhotoVerByUid, setUserPhotoVerByUid] = useState<Record<string, number>>({});
   const userPhotoUnsubs = useRef<Record<string, () => void>>({});
 
   const [actionOpen, setActionOpen] = useState(false);
@@ -242,11 +353,27 @@ export default function Menu() {
     return AVATAR_ASSETS[k] || null;
   };
 
-  const sourceFor = (photoUrl: string | null | undefined) => {
+  const isHttpUrl = (v: string) => {
+    const s = String(v || "").trim().toLowerCase();
+    return s.startsWith("http://") || s.startsWith("https://");
+  };
+
+  const withVer = (u: string, ver: number) => {
+    const s = u.trim();
+    if (!s) return s;
+    if (!isHttpUrl(s)) return s;
+    const glue = s.includes("?") ? "&" : "?";
+    return `${s}${glue}v=${Math.max(0, Math.floor(ver || 0))}`;
+  };
+
+  const sourceFor = (photoUrl: string | null | undefined, ver?: number | null) => {
     const asset = assetFor(photoUrl);
     if (asset) return asset;
+
     const s = typeof photoUrl === "string" ? photoUrl.trim() : "";
     if (!s) return fallbackAvatar;
+
+    if (typeof ver === "number" && ver > 0 && isHttpUrl(s)) return { uri: withVer(s, ver) };
     return { uri: s };
   };
 
@@ -277,13 +404,22 @@ export default function Menu() {
     return h >>> 0;
   };
 
+  const uniqueTagForUid = (uidLike: string | null | undefined) => {
+    const uid = typeof uidLike === "string" ? uidLike.trim() : "";
+    if (!uid) return "";
+    const a = hashStr(`tagA|${uid}`).toString(36).padStart(6, "0");
+    const b = hashStr(`tagB|${uid}`).toString(36).padStart(6, "0");
+    return (a + b).slice(0, 8);
+  };
+
   const aliasForUid = (uidLike: string | null | undefined) => {
     const uid = typeof uidLike === "string" ? uidLike.trim() : "";
-    if (!uid) return "Playful Guest";
-    const seed = hashStr(`${dayStamp}|${uid}`);
+    if (!uid) return "Brainrot Guest";
+    const seed = hashStr(`alias|${uid}`);
     const a = ALIAS_ADJ[seed % ALIAS_ADJ.length];
     const n = ALIAS_NOUN[Math.floor(seed / ALIAS_ADJ.length) % ALIAS_NOUN.length];
-    return `${a} ${n}`;
+    const tag = uniqueTagForUid(uid);
+    return `${a} ${n} • ${tag}`;
   };
 
   const handleForUid = (uidLike: string | null | undefined) => {
@@ -299,6 +435,7 @@ export default function Menu() {
       const uid = u?.uid ? String(u.uid) : null;
       setMyUid(uid);
       setMyPhotoUrl(null);
+      setMyPhotoVer(0);
     });
     return () => unsub();
   }, []);
@@ -310,10 +447,21 @@ export default function Menu() {
       (snap) => {
         const data: any = snap.exists() ? snap.data() : null;
         const nextPhoto = typeof data?.photoUrl === "string" ? data.photoUrl : null;
+        const nextVer =
+          typeof data?.photoVer === "number"
+            ? data.photoVer
+            : typeof data?.photoUpdatedAt === "number"
+            ? data.photoUpdatedAt
+            : typeof data?.updatedAt === "number"
+            ? data.updatedAt
+            : 0;
+
         setMyPhotoUrl(nextPhoto);
+        setMyPhotoVer(Math.max(0, Math.floor(nextVer || 0)));
       },
       () => {
         setMyPhotoUrl(null);
+        setMyPhotoVer(0);
       }
     );
     return () => unsub();
@@ -412,10 +560,24 @@ export default function Menu() {
         (snap) => {
           const data: any = snap.exists() ? snap.data() : null;
           const next = typeof data?.photoUrl === "string" ? data.photoUrl : null;
+          const nextVer =
+            typeof data?.photoVer === "number"
+              ? data.photoVer
+              : typeof data?.photoUpdatedAt === "number"
+              ? data.photoUpdatedAt
+              : typeof data?.updatedAt === "number"
+              ? data.updatedAt
+              : 0;
+
           setUserPhotoByUid((prev) => (prev[uid] === next ? prev : { ...prev, [uid]: next }));
+          setUserPhotoVerByUid((prev) => {
+            const v = Math.max(0, Math.floor(nextVer || 0));
+            return prev[uid] === v ? prev : { ...prev, [uid]: v };
+          });
         },
         () => {
           setUserPhotoByUid((prev) => (prev[uid] === null ? prev : { ...prev, [uid]: null }));
+          setUserPhotoVerByUid((prev) => (prev[uid] === 0 ? prev : { ...prev, [uid]: 0 }));
         }
       );
 
@@ -429,6 +591,12 @@ export default function Menu() {
       } catch {}
       delete userPhotoUnsubs.current[uid];
       setUserPhotoByUid((prev) => {
+        if (!(uid in prev)) return prev;
+        const next = { ...prev };
+        delete next[uid];
+        return next;
+      });
+      setUserPhotoVerByUid((prev) => {
         if (!(uid in prev)) return prev;
         const next = { ...prev };
         delete next[uid];
@@ -518,6 +686,8 @@ export default function Menu() {
       router.replace("/login");
       return;
     }
+    if (!!myUid && (r.uid || "") === myUid) return;
+
     setThreadPostId(postId);
     setReplyingPostId(postId);
     setReplyParentId(r.id);
@@ -552,6 +722,11 @@ export default function Menu() {
 
     const t = replyText.trim();
     if (!t || t.length > 280) return;
+
+    if (replyParentId) {
+      const parent = replies.find((x) => x.id === replyParentId) || null;
+      if (parent && (parent.uid || "") === myUid) return;
+    }
 
     setSendingReply(true);
     try {
@@ -613,41 +788,68 @@ export default function Menu() {
     return { byParent, rootKey };
   }, [replies]);
 
-  const renderReplyList = (postId: string, parentId: string | null, depth: number) => {
-    const key = parentId ? parentId : replyTree.rootKey;
-    const kids = replyTree.byParent[key] || [];
-    if (!kids.length) return null;
+  const replyNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const r of replies) m[r.id] = aliasForUid(r.uid) || "Anonymous";
+    return m;
+  }, [replies]);
 
-    return kids.map((r) => {
+  const renderFlatReplyList = (postId: string) => {
+    if (!replies.length) return null;
+
+    return replies.map((r, idx) => {
       const name = aliasForUid(r.uid) || "Anonymous";
       const uidShort = handleForUid(r.uid);
       const time = whenLabel(r.createdAt);
 
       const isMe = !!myUid && (r.uid || "") === myUid;
+
       const liveOtherPhoto = !isMe && r.uid ? userPhotoByUid[String(r.uid)] || null : null;
-      const bestPhoto = (isMe ? myPhotoUrl : null) || liveOtherPhoto || r.photoUrl || null;
+      const liveOtherVer = !isMe && r.uid ? userPhotoVerByUid[String(r.uid)] || 0 : 0;
+
+      const bestPhoto: PhotoState = isMe
+        ? { url: myPhotoUrl || null, ver: myPhotoVer || 0 }
+        : liveOtherPhoto
+        ? { url: liveOtherPhoto, ver: liveOtherVer }
+        : { url: r.photoUrl || null, ver: 0 };
 
       const replyColor = typeof r.textColor === "string" && r.textColor.trim() ? r.textColor.trim() : "#111";
+      const replyingToName = r.parentId ? replyNameById[r.parentId] || "Someone" : "";
+
+      const isPostReply = !r.parentId;
+      const showPostReplySeparator = isPostReply && idx !== 0;
+
+      const canReplyToThisReply = !!auth.currentUser && !isMe;
 
       return (
-        <View key={r.id} style={[styles.replyRow, depth > 0 && { marginLeft: Math.min(44, depth * 14) }]}>
-          <Image source={sourceFor(bestPhoto)} style={styles.replyAvatar} contentFit="cover" />
-          <View style={styles.replyBody}>
-            <View style={styles.replyHead}>
-              <ThemedText style={styles.replyName} numberOfLines={1}>
-                {name}
-              </ThemedText>
-              {!!uidShort && <ThemedText style={styles.replyHandle}>{uidShort}</ThemedText>}
-              {!!time && <ThemedText style={styles.replyTime}>{time}</ThemedText>}
-              <View style={{ flex: 1 }} />
-              <Pressable style={({ pressed }) => [styles.replyBtn, pressed && styles.pressed]} onPress={() => openReplyForReply(postId, r)}>
-                <ThemedText style={styles.replyBtnText}>Reply</ThemedText>
-              </Pressable>
+        <View key={r.id} style={styles.replyItemWrap}>
+          {showPostReplySeparator && <View style={styles.postReplySeparator} />}
+
+          <View style={[styles.replyRow, { marginTop: 0 }]}>
+            <Image source={sourceFor(bestPhoto.url, bestPhoto.ver)} style={styles.replyAvatar} contentFit="cover" />
+            <View style={styles.replyBody}>
+              <View style={styles.replyHead}>
+                <ThemedText style={styles.replyName} numberOfLines={1}>
+                  {name}
+                </ThemedText>
+                {!!uidShort && <ThemedText style={styles.replyHandle}>{uidShort}</ThemedText>}
+                {!!time && <ThemedText style={styles.replyTime}>{time}</ThemedText>}
+                <View style={{ flex: 1 }} />
+                {canReplyToThisReply ? (
+                  <Pressable style={({ pressed }) => [styles.replyBtn, pressed && styles.pressed]} onPress={() => openReplyForReply(postId, r)}>
+                    <ThemedText style={styles.replyBtnText}>Reply</ThemedText>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {!!replyingToName && (
+                <ThemedText style={styles.replyToText} numberOfLines={1}>
+                  Replying to {replyingToName}
+                </ThemedText>
+              )}
+
+              <ThemedText style={[styles.replyText, { color: replyColor }]}>{r.text}</ThemedText>
             </View>
-
-            <ThemedText style={[styles.replyText, { color: replyColor }]}>{r.text}</ThemedText>
-
-            {renderReplyList(postId, r.id, depth + 1)}
           </View>
         </View>
       );
@@ -771,9 +973,9 @@ export default function Menu() {
           {posts.length === 0 ? (
             <View style={styles.emptyCard}>
               <View style={styles.postHead}>
-                <Image source={sourceFor(myPhotoUrl || null)} style={styles.avatarImg} contentFit="cover" />
+                <Image source={sourceFor(myPhotoUrl || null, myPhotoVer)} style={styles.avatarImg} contentFit="cover" />
                 <View style={styles.nameWrap}>
-                  <ThemedText style={styles.name}>{auth.currentUser ? aliasForUid(myUid) : "Playful Guest"}</ThemedText>
+                  <ThemedText style={styles.name}>{auth.currentUser ? aliasForUid(myUid) : "Brainrot Guest"}</ThemedText>
                 </View>
               </View>
               <ThemedText style={styles.emptyTitle}>No posts yet</ThemedText>
@@ -782,8 +984,16 @@ export default function Menu() {
           ) : (
             posts.map((p) => {
               const isMe = !!myUid && (p.uid || "") === myUid;
+
               const liveOtherPhoto = !isMe && p.uid ? userPhotoByUid[String(p.uid)] || null : null;
-              const bestPhoto = (isMe ? myPhotoUrl : null) || liveOtherPhoto || p.photoUrl || null;
+              const liveOtherVer = !isMe && p.uid ? userPhotoVerByUid[String(p.uid)] || 0 : 0;
+
+              const bestPhoto: PhotoState = isMe
+                ? { url: myPhotoUrl || null, ver: myPhotoVer || 0 }
+                : liveOtherPhoto
+                ? { url: liveOtherPhoto, ver: liveOtherVer }
+                : { url: p.photoUrl || null, ver: 0 };
+
               const isThreadOpen = threadPostId === p.id;
               const postTime = whenLabel(p.createdAt ?? null);
               const displayName = aliasForUid(p.uid) || "Anonymous";
@@ -794,7 +1004,7 @@ export default function Menu() {
               return (
                 <View key={p.id} style={styles.post}>
                   <View style={styles.postHead}>
-                    <Image source={sourceFor(bestPhoto)} style={styles.avatarImg} contentFit="cover" />
+                    <Image source={sourceFor(bestPhoto.url, bestPhoto.ver)} style={styles.avatarImg} contentFit="cover" />
                     <View style={styles.nameWrap}>
                       <ThemedText style={styles.name}>{displayName}</ThemedText>
                       <View style={styles.handleRow}>
@@ -840,7 +1050,7 @@ export default function Menu() {
                           <ThemedText style={styles.threadEmptyText}>Be the first to reply.</ThemedText>
                         </View>
                       ) : (
-                        <View style={styles.replyList}>{renderReplyList(p.id, null, 0)}</View>
+                        <View style={styles.replyList}>{renderFlatReplyList(p.id)}</View>
                       )}
                     </View>
                   )}
@@ -1004,9 +1214,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroLeft: { flex: 1 },
-  heroKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase" },
-  heroTitle: { color: "#111", fontSize: 28 },
-  heroSub: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18 },
+  heroKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase", fontFamily: "Poppins_500Medium" },
+  heroTitle: { color: "#111", fontSize: 28, fontFamily: "Poppins_600SemiBold" },
+  heroSub: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18, fontFamily: "Poppins_400Regular" },
 
   thoughtCard: {
     backgroundColor: "#0a0a0a",
@@ -1026,6 +1236,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     textTransform: "uppercase",
     paddingRight: 10,
+    fontFamily: "Poppins_500Medium",
   },
   thoughtBtn: {
     height: 30,
@@ -1035,12 +1246,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  thoughtBtnText: { color: "#111", fontSize: 12, letterSpacing: 0.3, textTransform: "uppercase" },
-  thoughtText: { color: "white", lineHeight: 22, marginTop: 2 },
+  thoughtBtnText: { color: "#111", fontSize: 12, letterSpacing: 0.3, textTransform: "uppercase", fontFamily: "Poppins_600SemiBold" },
+  thoughtText: { color: "white", lineHeight: 22, marginTop: 2, fontFamily: "Poppins_400Regular" },
 
   sectionHead: { marginTop: 14, paddingHorizontal: 2, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
-  sectionTitle: { fontSize: 13, color: "#111", letterSpacing: 0.3 },
-  sectionHint: { fontSize: 12, color: "#6b7280" },
+  sectionTitle: { fontSize: 13, color: "#111", letterSpacing: 0.3, fontFamily: "Poppins_600SemiBold" },
+  sectionHint: { fontSize: 12, color: "#6b7280", fontFamily: "Poppins_400Regular" },
 
   feedWrap: { marginTop: 10, gap: 10 },
 
@@ -1058,17 +1269,17 @@ const styles = StyleSheet.create({
   postHead: { flexDirection: "row", alignItems: "center" },
   avatarImg: { width: 38, height: 38, borderRadius: 12, backgroundColor: "#e5e7eb" },
   nameWrap: { marginLeft: 10, flex: 1, minWidth: 0 },
-  name: { color: "#111", fontSize: 13 },
+  name: { color: "#111", fontSize: 13, fontFamily: "Poppins_600SemiBold" },
   handleRow: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 8 },
-  handle: { color: "#6b7280", fontSize: 11 },
-  postTime: { color: "#6b7280", fontSize: 11 },
+  handle: { color: "#6b7280", fontSize: 11, fontFamily: "Poppins_400Regular" },
+  postTime: { color: "#6b7280", fontSize: 11, fontFamily: "Poppins_400Regular" },
 
   moreBtn: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#f3f4f6", borderWidth: 1, borderColor: "#e5e7eb" },
-  moreIcon: { fontSize: 18, color: "#111", marginTop: -2 },
+  moreIcon: { fontSize: 18, color: "#111", marginTop: -2, fontFamily: "Poppins_600SemiBold" },
   moreBtnDisabled: { opacity: 0.45 },
   moreIconDisabled: { color: "#6b7280" },
 
-  postText: { marginTop: 10, fontSize: 14, color: "#111", lineHeight: 20 },
+  postText: { marginTop: 10, fontSize: 14, color: "#111", lineHeight: 20, fontFamily: "Poppins_400Regular" },
 
   mediaBox: {
     marginTop: 10,
@@ -1091,7 +1302,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  pillText: { fontSize: 11, color: "#111" },
+  pillText: { fontSize: 11, color: "#111", fontFamily: "Poppins_500Medium" },
 
   threadRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
   threadBtn: {
@@ -1105,23 +1316,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   threadBtnGhost: { backgroundColor: "white", borderColor: "#e5e7eb" },
-  threadBtnText: { color: "white", fontSize: 12, letterSpacing: 0.2 },
-  threadBtnTextGhost: { color: "#111", fontSize: 12, letterSpacing: 0.2 },
+  threadBtnText: { color: "white", fontSize: 12, letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
+  threadBtnTextGhost: { color: "#111", fontSize: 12, letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
 
   threadBox: { marginTop: 12, borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.06)", paddingTop: 12 },
   threadEmpty: { paddingVertical: 8 },
-  threadEmptyTitle: { fontSize: 12, color: "#111" },
-  threadEmptyText: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18 },
+  threadEmptyTitle: { fontSize: 12, color: "#111", fontFamily: "Poppins_600SemiBold" },
+  threadEmptyText: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18, fontFamily: "Poppins_400Regular" },
   replyList: { gap: 10 },
+
+  replyItemWrap: { gap: 10 },
+
+  postReplySeparator: {
+    height: 1,
+    backgroundColor: "#e5e7eb",
+    marginLeft: 40,
+  },
 
   replyRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 10 },
   replyAvatar: { width: 30, height: 30, borderRadius: 10, backgroundColor: "#e5e7eb" },
   replyBody: { flex: 1, minWidth: 0 },
   replyHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-  replyName: { fontSize: 12, color: "#111", maxWidth: 140 },
-  replyHandle: { fontSize: 11, color: "#6b7280" },
-  replyTime: { fontSize: 11, color: "#6b7280" },
-  replyText: { marginTop: 6, fontSize: 13, color: "#111", lineHeight: 18 },
+  replyName: { fontSize: 12, color: "#111", maxWidth: 140, fontFamily: "Poppins_600SemiBold" },
+  replyHandle: { fontSize: 11, color: "#6b7280", fontFamily: "Poppins_400Regular" },
+  replyTime: { fontSize: 11, color: "#6b7280", fontFamily: "Poppins_400Regular" },
+
+  replyToText: { marginTop: 4, fontSize: 11, color: "#6b7280", fontFamily: "Poppins_400Regular" },
+
+  replyText: { marginTop: 6, fontSize: 13, color: "#111", lineHeight: 18, fontFamily: "Poppins_400Regular" },
 
   replyBtn: {
     height: 24,
@@ -1133,11 +1355,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  replyBtnText: { fontSize: 11, color: "#111" },
+  replyBtnText: { fontSize: 11, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
   postActions: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 14 },
   postAction: { paddingVertical: 2, paddingHorizontal: 4 },
-  actionIcon: { fontSize: 14, color: "#111" },
+  actionIcon: { fontSize: 14, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
   emptyCard: {
     backgroundColor: "white",
@@ -1146,8 +1368,8 @@ const styles = StyleSheet.create({
     borderColor: "#e5e7eb",
     padding: 12,
   },
-  emptyTitle: { marginTop: 10, fontSize: 14, color: "#111" },
-  emptyText: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18 },
+  emptyTitle: { marginTop: 10, fontSize: 14, color: "#111", fontFamily: "Poppins_600SemiBold" },
+  emptyText: { marginTop: 4, fontSize: 12, color: "#6b7280", lineHeight: 18, fontFamily: "Poppins_400Regular" },
 
   fab: {
     position: "absolute",
@@ -1167,7 +1389,7 @@ const styles = StyleSheet.create({
     borderColor: "#111",
   },
   fabPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
-  fabPlus: { fontSize: 26, lineHeight: 26, color: "white" },
+  fabPlus: { fontSize: 26, lineHeight: 26, color: "white", fontFamily: "Poppins_600SemiBold" },
 
   bottomBar: {
     position: "absolute",
@@ -1183,7 +1405,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   navBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  navIcon: { color: "white", fontSize: 18 },
+  navIcon: { color: "white", fontSize: 18, fontFamily: "Poppins_600SemiBold" },
 
   actionWrap: { flex: 1, justifyContent: "flex-end" },
   actionBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
@@ -1206,9 +1428,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   actionBtnDisabled: { opacity: 0.6 },
-  actionDeleteText: { color: "#b91c1c", fontSize: 13, letterSpacing: 0.3 },
+  actionDeleteText: { color: "#b91c1c", fontSize: 13, letterSpacing: 0.3, fontFamily: "Poppins_600SemiBold" },
   actionCancelBtn: { backgroundColor: "#111", borderColor: "#111", marginBottom: 40 },
-  actionCancelText: { color: "white", fontSize: 13, letterSpacing: 0.3 },
+  actionCancelText: { color: "white", fontSize: 13, letterSpacing: 0.3, fontFamily: "Poppins_600SemiBold" },
 
   replyModalWrap: {
     flex: 1,
@@ -1235,8 +1457,8 @@ const styles = StyleSheet.create({
 
   replyTitleWrap: { flex: 1, minWidth: 0 },
   replyModalHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
-  replyModalKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.3, textTransform: "uppercase" },
-  replyModalTitle: { marginTop: 2, fontSize: 16, color: "#111", letterSpacing: 0.2 },
+  replyModalKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.3, textTransform: "uppercase", fontFamily: "Poppins_500Medium" },
+  replyModalTitle: { marginTop: 2, fontSize: 16, color: "#111", letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
 
   replyModalX: {
     width: 38,
@@ -1248,12 +1470,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e7eb",
   },
-  replyModalXText: { fontSize: 14, color: "#111" },
+  replyModalXText: { fontSize: 14, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
   replyInputWrap: { borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 16, padding: 12, backgroundColor: "white" },
 
   replyColorRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 },
-  replyColorLbl: { fontSize: 12, color: "#6b7280", marginRight: 2 },
+  replyColorLbl: { fontSize: 12, color: "#6b7280", marginRight: 2, fontFamily: "Poppins_500Medium" },
   replyColorSwatchesWrap: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   replyColorSwatch: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: "#e5e7eb" },
   replyColorSwatchSelected: { borderWidth: 2, borderColor: "#111" },
@@ -1264,10 +1486,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  replyInput: { minHeight: 120, fontSize: 14, color: "#111", lineHeight: 20 },
+  replyInput: { minHeight: 120, fontSize: 14, color: "#111", lineHeight: 20, fontFamily: "Poppins_400Regular" },
 
   replyMetaRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
-  replyMetaText: { fontSize: 12, color: "#6b7280" },
+  replyMetaText: { fontSize: 12, color: "#6b7280", fontFamily: "Poppins_400Regular" },
 
   replyCancelBtn: {
     height: 34,
@@ -1279,7 +1501,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  replyCancelText: { color: "#111", fontSize: 12, letterSpacing: 0.2 },
+  replyCancelText: { color: "#111", fontSize: 12, letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
 
   replySendBtn: {
     height: 34,
@@ -1292,5 +1514,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   replySendBtnDisabled: { opacity: 0.5, borderWidth: 0, borderColor: "transparent" },
-  replySendText: { color: "white", fontSize: 12, letterSpacing: 0.2 },
+  replySendText: { color: "white", fontSize: 12, letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
 });

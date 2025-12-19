@@ -3,6 +3,8 @@ import Navigation from "@/components/navigation";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { auth, db } from "@/firebase";
+import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from "@expo-google-fonts/poppins";
+import { useFonts } from "expo-font";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
@@ -283,6 +285,12 @@ function DrawingModal({
 }
 
 export default function Compose() {
+  useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+  });
+
   const insets = useSafeAreaInsets();
 
   const topInset = useMemo(() => {
@@ -478,10 +486,7 @@ export default function Compose() {
         <View style={[styles.statusBg, { height: topInset }]} />
       </Animated.View>
 
-      <KeyboardAvoidingView
-        style={[styles.flex, { paddingTop: topNavH || 0 }]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={[styles.flex, { paddingTop: topNavH || 0 }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -564,33 +569,6 @@ export default function Compose() {
                 />
               </View>
 
-              <View style={styles.mediaRow}>
-                <Pressable style={({ pressed }) => [styles.mediaBtn, pressed && styles.pressed]} onPress={pickImage}>
-                  <ThemedText style={styles.mediaBtnText}>Add image</ThemedText>
-                </Pressable>
-
-                <Pressable style={({ pressed }) => [styles.mediaBtn, pressed && styles.pressed]} onPress={openDrawing}>
-                  <ThemedText style={styles.mediaBtnText}>Draw</ThemedText>
-                </Pressable>
-
-                <View style={{ flex: 1 }} />
-
-                {!!hasMedia && (
-                  <Pressable
-                    style={({ pressed }) => [styles.mediaBtn, styles.mediaBtnDanger, pressed && styles.pressed]}
-                    onPress={clearMedia}
-                  >
-                    <ThemedText style={styles.mediaBtnDangerText}>Remove</ThemedText>
-                  </Pressable>
-                )}
-              </View>
-
-              {!!error && (
-                <View style={styles.errorPill}>
-                  <ThemedText style={styles.errorText}>{error}</ThemedText>
-                </View>
-              )}
-
               <View style={styles.metaRow}>
                 <View style={styles.progressTrack}>
                   <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
@@ -600,12 +578,29 @@ export default function Compose() {
                 </ThemedText>
               </View>
 
-              <View style={styles.actions}>
+              <View style={styles.mediaRow}>
+                <Pressable style={({ pressed }) => [styles.mediaBtn, pressed && styles.pressed]} onPress={pickImage}>
+                  <ThemedText style={styles.mediaBtnText}>Add image</ThemedText>
+                </Pressable>
+
+                <Pressable style={({ pressed }) => [styles.mediaBtn, pressed && styles.pressed]} onPress={openDrawing}>
+                  <ThemedText style={styles.mediaBtnText}>Draw</ThemedText>
+                </Pressable>
+
+                {!!hasMedia && (
+                  <Pressable
+                    style={({ pressed }) => [styles.mediaBtn, styles.mediaBtnDanger, pressed && styles.pressed]}
+                    onPress={clearMedia}
+                  >
+                    <ThemedText style={styles.mediaBtnDangerText}>Remove</ThemedText>
+                  </Pressable>
+                )}
+
                 <View style={{ flex: 1 }} />
 
                 <Pressable
                   style={({ pressed }) => [
-                    styles.postBtnBottom,
+                    styles.postBtnInline,
                     (empty || over || posting) && styles.postBtnDisabled,
                     pressed && !(empty || over || posting) && styles.postBtnPressed,
                   ]}
@@ -615,6 +610,12 @@ export default function Compose() {
                   <ThemedText style={styles.postLbl}>{posting ? "POSTING..." : "POST"}</ThemedText>
                 </Pressable>
               </View>
+
+              {!!error && (
+                <View style={styles.errorPill}>
+                  <ThemedText style={styles.errorText}>{error}</ThemedText>
+                </View>
+              )}
             </View>
 
             <View style={styles.tipCard}>
@@ -694,11 +695,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
   backBtnPressed: { transform: [{ scale: 0.97 }], shadowOpacity: 0.02 },
-  backText: { fontSize: 24, lineHeight: 24, color: "#111" },
+  backText: { fontSize: 24, lineHeight: 24, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
   headerMid: { flex: 1 },
-  titleBlack: { color: "#111" },
-  subtitle: { marginTop: 2, fontSize: 12, color: "#6b7280" },
+  titleBlack: { color: "#111", fontFamily: "Poppins_600SemiBold" },
+  subtitle: { marginTop: 2, fontSize: 12, color: "#6b7280", fontFamily: "Poppins_400Regular" },
 
   headerRightGap: { width: 42, height: 42 },
 
@@ -719,8 +720,8 @@ const styles = StyleSheet.create({
 
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   cardTitleWrap: { flex: 1 },
-  cardKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase" },
-  cardTitle: { color: "#111", marginTop: 4, fontSize: 18 },
+  cardKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.4, textTransform: "uppercase", fontFamily: "Poppins_500Medium" },
+  cardTitle: { color: "#111", marginTop: 4, fontSize: 18, fontFamily: "Poppins_600SemiBold" },
 
   counterPill: {
     paddingHorizontal: 10,
@@ -732,7 +733,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  counterText: { fontSize: 12, color: "#111" },
+  counterText: { fontSize: 12, color: "#111", fontFamily: "Poppins_500Medium" },
   counterTextOver: { color: "#b91c1c" },
 
   previewBox: {
@@ -753,7 +754,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     flexWrap: "wrap",
   },
-  textColorLbl: { fontSize: 12, color: "#6b7280", marginRight: 2 },
+  textColorLbl: { fontSize: 12, color: "#6b7280", marginRight: 2, fontFamily: "Poppins_500Medium" },
   textColorSwatchesWrap: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   textColorSwatch: {
     width: 22,
@@ -787,35 +788,10 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     textAlignVertical: "top",
     lineHeight: 22,
+    fontFamily: "Poppins_400Regular",
   },
 
-  mediaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
-  mediaBtn: {
-    height: 34,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: "#f3f4f6",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  mediaBtnText: { fontSize: 12, color: "#111", letterSpacing: 0.2 },
-  mediaBtnDanger: { backgroundColor: "white", borderColor: "#fecaca" },
-  mediaBtnDangerText: { fontSize: 12, color: "#b91c1c", letterSpacing: 0.2 },
-
-  errorPill: {
-    marginTop: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    backgroundColor: "#fff7f7",
-  },
-  errorText: { fontSize: 12, color: "#b91c1c", lineHeight: 18 },
-
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
   progressTrack: {
     flex: 1,
     height: 8,
@@ -827,15 +803,40 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: 8, borderRadius: 999, backgroundColor: "#111" },
 
-  actions: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 },
+  mediaRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
 
-  countPlain: { fontSize: 12, color: "#6b7280" },
+  mediaBtn: {
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mediaBtnText: { fontSize: 12, color: "#111", letterSpacing: 0.2, fontFamily: "Poppins_500Medium" },
+  mediaBtnDanger: { backgroundColor: "white", borderColor: "#fecaca" },
+  mediaBtnDangerText: { fontSize: 12, color: "#b91c1c", letterSpacing: 0.2, fontFamily: "Poppins_500Medium" },
+
+  errorPill: {
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    backgroundColor: "#fff7f7",
+  },
+  errorText: { fontSize: 12, color: "#b91c1c", lineHeight: 18, fontFamily: "Poppins_500Medium" },
+
+  countPlain: { fontSize: 12, color: "#6b7280", fontFamily: "Poppins_500Medium" },
   countOver: { color: "#b91c1c", fontWeight: "600" },
 
-  postBtnBottom: {
-    paddingHorizontal: 16,
-    height: 40,
-    borderRadius: 14,
+  postBtnInline: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 999,
     backgroundColor: "#000000",
     alignItems: "center",
     justifyContent: "center",
@@ -845,7 +846,7 @@ const styles = StyleSheet.create({
 
   postBtnPressed: { transform: [{ scale: 0.99 }], opacity: 0.92 },
 
-  postLbl: { color: "white", fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase" },
+  postLbl: { color: "white", fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase", fontFamily: "Poppins_600SemiBold" },
   postBtnDisabled: { backgroundColor: "#9ca3af", borderColor: "#9ca3af" },
 
   tipCard: {
@@ -859,7 +860,7 @@ const styles = StyleSheet.create({
     borderColor: "#e5e7eb",
   },
   tipDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#111", marginTop: 4 },
-  tipText: { flex: 1, fontSize: 12, lineHeight: 18, color: "#475569" },
+  tipText: { flex: 1, fontSize: 12, lineHeight: 18, color: "#475569", fontFamily: "Poppins_400Regular" },
 
   drawWrap: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 14 },
   drawBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
@@ -878,8 +879,8 @@ const styles = StyleSheet.create({
   },
   drawHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   drawTitleWrap: { flex: 1, minWidth: 0 },
-  drawKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.3, textTransform: "uppercase" },
-  drawTitle: { marginTop: 2, fontSize: 16, color: "#111", letterSpacing: 0.2 },
+  drawKicker: { fontSize: 11, color: "#6b7280", letterSpacing: 0.3, textTransform: "uppercase", fontFamily: "Poppins_500Medium" },
+  drawTitle: { marginTop: 2, fontSize: 16, color: "#111", letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
   drawX: {
     width: 38,
     height: 38,
@@ -890,7 +891,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e7eb",
   },
-  drawXText: { fontSize: 14, color: "#111" },
+  drawXText: { fontSize: 14, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
   colorRow: {
     flexDirection: "row",
@@ -932,11 +933,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   drawBtnDisabled: { opacity: 0.5 },
-  drawBtnText: { color: "white", fontSize: 12, letterSpacing: 0.2 },
+  drawBtnText: { color: "white", fontSize: 12, letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
   drawBtnGhost: { backgroundColor: "white", borderColor: "#e5e7eb" },
-  drawBtnGhostText: { color: "#111", fontSize: 12, letterSpacing: 0.2 },
+  drawBtnGhostText: { color: "#111", fontSize: 12, letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
 
   drawHintRow: { marginTop: 12, flexDirection: "row", alignItems: "flex-start", gap: 10 },
   drawHintDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#111", marginTop: 4 },
-  drawHintText: { flex: 1, fontSize: 12, lineHeight: 18, color: "#475569" },
+  drawHintText: { flex: 1, fontSize: 12, lineHeight: 18, color: "#475569", fontFamily: "Poppins_400Regular" },
 });
