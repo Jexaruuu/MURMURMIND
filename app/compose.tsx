@@ -242,7 +242,12 @@ function DrawingModal({
 
           <View style={styles.drawActions}>
             <Pressable
-              style={({ pressed }) => [styles.drawBtn, styles.drawBtnGhost, pressed && styles.pressed, !canUndo && styles.drawBtnDisabled]}
+              style={({ pressed }) => [
+                styles.drawBtn,
+                styles.drawBtnGhost,
+                pressed && styles.pressed,
+                !canUndo && styles.drawBtnDisabled,
+              ]}
               onPress={undo}
               disabled={!canUndo}
             >
@@ -288,6 +293,12 @@ export default function Compose() {
 
   const [drawOpen, setDrawOpen] = useState(false);
   const [error, setError] = useState<string>("");
+
+  const TEXT_COLORS = useMemo(
+    () => ["#111111", "#EF4444", "#F97316", "#F59E0B", "#10B981", "#06B6D4", "#3B82F6", "#6366F1", "#A855F7", "#EC4899", "#22C55E"],
+    []
+  );
+  const [textColor, setTextColor] = useState<string>("#111111");
 
   const max = 280;
   const over = text.length > max;
@@ -389,6 +400,7 @@ export default function Compose() {
       const payload: any = {
         uid: u.uid,
         text: trimmed,
+        textColor,
         username,
         photoUrl: photoUrl || null,
         createdAt: serverTimestamp(),
@@ -402,6 +414,7 @@ export default function Compose() {
 
       setText("");
       clearMedia();
+      setTextColor("#111111");
       router.back();
     } catch {
       setError("Something went wrong while posting. Please try again.");
@@ -511,6 +524,26 @@ export default function Compose() {
                 </View>
               </View>
 
+              <View style={styles.textColorRow}>
+                <ThemedText style={styles.textColorLbl}>Choose Font Color:</ThemedText>
+                <View style={{ flex: 1 }} />
+                {TEXT_COLORS.map((c) => {
+                  const selected = textColor === c;
+                  return (
+                    <Pressable
+                      key={c}
+                      onPress={() => setTextColor(c)}
+                      style={({ pressed }) => [
+                        styles.textColorSwatch,
+                        { backgroundColor: c },
+                        selected && styles.textColorSwatchSelected,
+                        pressed && styles.pressed,
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+
               {mediaType === "image" && !!mediaUrl && (
                 <View style={styles.previewBox}>
                   <Image source={{ uri: mediaUrl }} style={styles.previewImg} contentFit="cover" />
@@ -529,7 +562,7 @@ export default function Compose() {
                   onChangeText={setText}
                   placeholder="Write something inspiring..."
                   placeholderTextColor="#9ca3af"
-                  style={styles.input}
+                  style={[styles.input, { color: textColor }]}
                   multiline
                 />
               </View>
@@ -716,6 +749,26 @@ const styles = StyleSheet.create({
   },
   previewImg: { width: "100%", height: "100%" },
 
+  textColorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+    flexWrap: "wrap",
+  },
+  textColorLbl: { fontSize: 12, color: "#6b7280" },
+  textColorSwatch: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  textColorSwatchSelected: {
+    borderWidth: 2,
+    borderColor: "#111",
+  },
+
   inputWrap: {
     marginTop: 10,
     borderRadius: 18,
@@ -729,7 +782,6 @@ const styles = StyleSheet.create({
 
   input: {
     minHeight: 170,
-    color: "#111",
     backgroundColor: "transparent",
     borderRadius: 12,
     padding: 0,
