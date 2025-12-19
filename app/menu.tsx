@@ -1,7 +1,9 @@
+// menu.tsx
 import HomeNavigation from "@/components/homenavigation";
 import Navigation from "@/components/navigation";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { useUserProfile } from "@/context/user-profile-context";
 import { auth, db } from "@/firebase";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -375,6 +377,8 @@ export default function Menu() {
     Poppins_600SemiBold,
   });
 
+  const { profile: navProfile, avatarSource: navAvatarSource, avatarCanError, markPhotoBroken } = useUserProfile();
+
   const [tIndex, setTIndex] = useState(0);
   const thought = useMemo(() => THOUGHTS[tIndex % THOUGHTS.length], [tIndex]);
   const insets = useSafeAreaInsets();
@@ -385,6 +389,18 @@ export default function Menu() {
   const [myUid, setMyUid] = useState<string | null>(auth.currentUser?.uid ? String(auth.currentUser.uid) : null);
   const [myPhotoUrl, setMyPhotoUrl] = useState<string | null>(null);
   const [myPhotoVer, setMyPhotoVer] = useState<number>(0);
+
+  const selfPhotoUrl = useMemo(() => {
+    const p = (navProfile as any)?.photoUrl;
+    const a = typeof p === "string" ? p.trim() : "";
+    if (a) return a;
+    const b = typeof myPhotoUrl === "string" ? myPhotoUrl.trim() : "";
+    return b || null;
+  }, [navProfile, myPhotoUrl]);
+
+  const selfAvatarSource = useMemo(() => {
+    return navAvatarSource || (selfPhotoUrl ? { uri: selfPhotoUrl } : fallbackAvatar);
+  }, [navAvatarSource, selfPhotoUrl]);
 
   const [userPhotoByUid, setUserPhotoByUid] = useState<Record<string, string | null>>({});
   const [userPhotoVerByUid, setUserPhotoVerByUid] = useState<Record<string, number>>({});
@@ -1191,7 +1207,7 @@ export default function Menu() {
       const payload: any = {
         uid: myUid,
         username: quickName,
-        photoUrl: myPhotoUrl || null,
+        photoUrl: selfPhotoUrl || myPhotoUrl || null,
         text: t,
         textColor: replyTextColor,
         parentId: replyParentId || null,
@@ -1405,10 +1421,12 @@ export default function Menu() {
       const liveOtherVer = !isMe && r.uid ? userPhotoVerByUid[String(r.uid)] || 0 : 0;
 
       const bestPhoto: PhotoState = isMe
-        ? { url: myPhotoUrl || null, ver: myPhotoVer || 0 }
+        ? { url: selfPhotoUrl || myPhotoUrl || null, ver: myPhotoVer || 0 }
         : liveOtherPhoto
         ? { url: liveOtherPhoto, ver: liveOtherVer }
         : { url: r.photoUrl || null, ver: 0 };
+
+      const avatarSrc = isMe ? selfAvatarSource : sourceFor(bestPhoto.url, bestPhoto.ver);
 
       const replyColor = typeof r.textColor === "string" && r.textColor.trim() ? r.textColor.trim() : "#111";
       const replyingToName = r.parentId ? replyNameById[r.parentId] || "Someone" : "";
@@ -1431,7 +1449,14 @@ export default function Menu() {
           {showPostReplySeparator && <View style={styles.postReplySeparator} />}
 
           <View style={[styles.replyRow, { marginTop: 0 }]}>
-            <Image source={sourceFor(bestPhoto.url, bestPhoto.ver)} style={styles.replyAvatar} contentFit="cover" />
+            <Image
+              source={avatarSrc}
+              style={styles.replyAvatar}
+              contentFit="cover"
+              onError={() => {
+                if (isMe && avatarCanError) markPhotoBroken();
+              }}
+            />
             <View style={styles.replyBody}>
               <View style={styles.replyHead}>
                 <ThemedText style={styles.replyName} numberOfLines={1}>
@@ -1661,7 +1686,14 @@ export default function Menu() {
           {posts.length === 0 ? (
             <View style={styles.emptyCard}>
               <View style={styles.postHead}>
-                <Image source={sourceFor(myPhotoUrl || null, myPhotoVer)} style={styles.avatarImg} contentFit="cover" />
+                <Image
+                  source={auth.currentUser ? selfAvatarSource : sourceFor(myPhotoUrl || null, myPhotoVer)}
+                  style={styles.avatarImg}
+                  contentFit="cover"
+                  onError={() => {
+                    if (auth.currentUser && avatarCanError) markPhotoBroken();
+                  }}
+                />
                 <View style={styles.nameWrap}>
                   <ThemedText style={styles.name}>{auth.currentUser ? aliasForUid(myUid) : "Brainrot Guest"}</ThemedText>
                 </View>
@@ -1677,10 +1709,12 @@ export default function Menu() {
               const liveOtherVer = !isMe && p.uid ? userPhotoVerByUid[String(p.uid)] || 0 : 0;
 
               const bestPhoto: PhotoState = isMe
-                ? { url: myPhotoUrl || null, ver: myPhotoVer || 0 }
+                ? { url: selfPhotoUrl || myPhotoUrl || null, ver: myPhotoVer || 0 }
                 : liveOtherPhoto
                 ? { url: liveOtherPhoto, ver: liveOtherVer }
                 : { url: p.photoUrl || null, ver: 0 };
+
+              const avatarSrc = isMe ? selfAvatarSource : sourceFor(bestPhoto.url, bestPhoto.ver);
 
               const isThreadOpen = threadPostId === p.id;
               const postTime = whenLabel(p.createdAt ?? null);
@@ -1699,7 +1733,14 @@ export default function Menu() {
               return (
                 <View key={p.id} style={styles.post}>
                   <View style={styles.postHead}>
-                    <Image source={sourceFor(bestPhoto.url, bestPhoto.ver)} style={styles.avatarImg} contentFit="cover" />
+                    <Image
+                      source={avatarSrc}
+                      style={styles.avatarImg}
+                      contentFit="cover"
+                      onError={() => {
+                        if (isMe && avatarCanError) markPhotoBroken();
+                      }}
+                    />
                     <View style={styles.nameWrap}>
                       <ThemedText style={styles.name}>{displayName}</ThemedText>
                       <View style={styles.handleRow}>

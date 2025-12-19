@@ -11,7 +11,7 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="login"
-          options={{ animation: "slide_from_right", gestureEnabled: true, gestureDirection: "horizontal" }}
+          options={{ animation: "slide_from_left", gestureEnabled: true, gestureDirection: "horizontal" }}
         />
         <Stack.Screen
           name="signup"

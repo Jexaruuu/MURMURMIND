@@ -78,7 +78,7 @@ export default function Login() {
       </View>
 
       <View style={[styles.sheet, { paddingBottom: 24 + Math.max(insets.bottom, 16) }]}>
-        <ThemedText style={[styles.sheetTitle, { fontFamily: "Poppins_500Medium" }]}>Welcome Back</ThemedText>
+        <ThemedText style={[styles.sheetTitle, { fontFamily: "Poppins_500Medium" }]}>Login to share your thoughts.</ThemedText>
 
         <View style={styles.form}>
           <TextInput
