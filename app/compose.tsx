@@ -42,16 +42,54 @@ function DrawingModal({
   onCancel: () => void;
   onSave: (svg: string) => void;
 }) {
+  type DrawPath = { d: string; c: string };
+
+  const COLORS = useMemo(
+    () => [
+      "#111111",
+      "#EF4444",
+      "#F97316",
+      "#F59E0B",
+      "#10B981",
+      "#06B6D4",
+      "#3B82F6",
+      "#6366F1",
+      "#A855F7",
+      "#EC4899",
+      "#8B5CF6",
+      "#22C55E",
+    ],
+    []
+  );
+
   const [w, setW] = useState(320);
   const [h, setH] = useState(320);
-  const [paths, setPaths] = useState<string[]>([]);
+  const [paths, setPaths] = useState<DrawPath[]>([]);
   const [current, setCurrent] = useState<string>("");
   const currentRef = useRef<string>("");
+  const [strokeColor, setStrokeColor] = useState<string>("#111111");
+  const strokeColorRef = useRef<string>("#111111");
+  const currentColorRef = useRef<string>("#111111");
 
   const reset = () => {
     setPaths([]);
     setCurrent("");
     currentRef.current = "";
+    currentColorRef.current = strokeColorRef.current;
+  };
+
+  const setColor = (c: string) => {
+    strokeColorRef.current = c;
+    setStrokeColor(c);
+  };
+
+  const undo = () => {
+    if (current) {
+      setCurrent("");
+      currentRef.current = "";
+      return;
+    }
+    setPaths((prev) => (prev.length ? prev.slice(0, -1) : prev));
   };
 
   const pan = useMemo(
@@ -63,6 +101,7 @@ function DrawingModal({
           const { locationX, locationY } = e.nativeEvent;
           const d = `M ${locationX.toFixed(2)} ${locationY.toFixed(2)}`;
           currentRef.current = d;
+          currentColorRef.current = strokeColorRef.current;
           setCurrent(d);
         },
         onPanResponderMove: (e) => {
@@ -73,13 +112,15 @@ function DrawingModal({
         },
         onPanResponderRelease: () => {
           const d = currentRef.current;
-          if (d && d.length > 3) setPaths((prev) => [...prev, d]);
+          const c = currentColorRef.current || strokeColorRef.current;
+          if (d && d.length > 3) setPaths((prev) => [...prev, { d, c }]);
           currentRef.current = "";
           setCurrent("");
         },
         onPanResponderTerminate: () => {
           const d = currentRef.current;
-          if (d && d.length > 3) setPaths((prev) => [...prev, d]);
+          const c = currentColorRef.current || strokeColorRef.current;
+          if (d && d.length > 3) setPaths((prev) => [...prev, { d, c }]);
           currentRef.current = "";
           setCurrent("");
         },
@@ -88,20 +129,26 @@ function DrawingModal({
   );
 
   const buildSvg = () => {
-    const stroke = "#111";
     const strokeWidth = 4;
-    const joined = [...paths, current].filter(Boolean);
+    const joined: DrawPath[] = [
+      ...paths,
+      ...(current ? [{ d: current, c: currentColorRef.current || strokeColorRef.current }] : []),
+    ];
     const body = joined
+      .filter((p) => p?.d)
       .map(
-        (d) =>
-          `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" />`
+        (p) =>
+          `<path d="${p.d}" fill="none" stroke="${p.c}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" />`
       )
       .join("");
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">${body}</svg>`;
   };
 
   const handleSave = () => {
-    const joined = [...paths, current].filter(Boolean);
+    const joined = [
+      ...paths,
+      ...(current ? [{ d: current, c: currentColorRef.current || strokeColorRef.current }] : []),
+    ].filter(Boolean);
     if (!joined.length) return;
     onSave(buildSvg());
     reset();
@@ -111,6 +158,9 @@ function DrawingModal({
     reset();
     onCancel();
   };
+
+  const canSave = paths.length > 0 || !!current;
+  const canUndo = paths.length > 0 || !!current;
 
   return (
     <Modal
@@ -137,6 +187,24 @@ function DrawingModal({
             </Pressable>
           </View>
 
+          <View style={styles.colorRow}>
+            {COLORS.map((c) => {
+              const selected = strokeColor === c;
+              return (
+                <Pressable
+                  key={c}
+                  onPress={() => setColor(c)}
+                  style={({ pressed }) => [
+                    styles.colorSwatch,
+                    { backgroundColor: c },
+                    selected && styles.colorSwatchSelected,
+                    pressed && styles.pressed,
+                  ]}
+                />
+              );
+            })}
+          </View>
+
           <View
             style={styles.canvasBox}
             onLayout={(e) => {
@@ -148,24 +216,39 @@ function DrawingModal({
             {...pan.panHandlers}
           >
             <Svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`}>
-              {paths.map((d, i) => (
+              {paths.map((p, i) => (
                 <Path
                   key={String(i)}
-                  d={d}
+                  d={p.d}
                   fill="none"
-                  stroke="#111"
+                  stroke={p.c}
                   strokeWidth={4}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               ))}
               {!!current && (
-                <Path d={current} fill="none" stroke="#111" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+                <Path
+                  d={current}
+                  fill="none"
+                  stroke={currentColorRef.current || strokeColor}
+                  strokeWidth={4}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               )}
             </Svg>
           </View>
 
           <View style={styles.drawActions}>
+            <Pressable
+              style={({ pressed }) => [styles.drawBtn, styles.drawBtnGhost, pressed && styles.pressed, !canUndo && styles.drawBtnDisabled]}
+              onPress={undo}
+              disabled={!canUndo}
+            >
+              <ThemedText style={styles.drawBtnGhostText}>Undo</ThemedText>
+            </Pressable>
+
             <Pressable style={({ pressed }) => [styles.drawBtn, styles.drawBtnGhost, pressed && styles.pressed]} onPress={reset}>
               <ThemedText style={styles.drawBtnGhostText}>Clear</ThemedText>
             </Pressable>
@@ -173,18 +256,18 @@ function DrawingModal({
             <View style={{ flex: 1 }} />
 
             <Pressable
-              style={({ pressed }) => [styles.drawBtn, pressed && styles.pressed, !paths.length && styles.drawBtnDisabled]}
+              style={({ pressed }) => [styles.drawBtn, pressed && styles.pressed, !canSave && styles.drawBtnDisabled]}
               onPress={handleSave}
-              disabled={!paths.length}
+              disabled={!canSave}
             >
               <ThemedText style={styles.drawBtnText}>Save</ThemedText>
             </Pressable>
           </View>
 
-          {!!paths.length && (
+          {canSave && (
             <View style={styles.drawHintRow}>
               <View style={styles.drawHintDot} />
-              <ThemedText style={styles.drawHintText}>Tip: draw with your finger/mouse, then tap Save.</ThemedText>
+              <ThemedText style={styles.drawHintText}>Tip: pick a color, draw, then tap Save.</ThemedText>
             </View>
           )}
         </View>
@@ -758,6 +841,25 @@ const styles = StyleSheet.create({
     borderColor: "#e5e7eb",
   },
   drawXText: { fontSize: 14, color: "#111" },
+
+  colorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    marginBottom: 10,
+  },
+  colorSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  colorSwatchSelected: {
+    borderWidth: 2,
+    borderColor: "#111",
+  },
 
   canvasBox: {
     height: 360,
