@@ -9,13 +9,13 @@ import { router } from "expo-router";
 import { signOut, updateEmail, updatePassword, updateProfile } from "firebase/auth";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Animated, Easing, Modal, Pressable, StatusBar as RNStatusBar, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const fallbackAvatar = require("@/assets/images/murmurblack.png");
 const editPlaceholder = require("@/assets/images/murmurblack.png");
 
-const MENU_WIDTH = 280;
+const MENU_WIDTH = 260;
 const MENU_ICON_SIZE = 18;
 
 const ASSET_PREFIX = "asset:";
@@ -252,6 +252,8 @@ export default function ProfileMenuSheet({
   const lastServerPhoto = useRef<string | null>(null);
   const lastServerPhotoVer = useRef<number>(0);
 
+  const statusEntry = useRef<any>(null);
+
   const assetFor = (v: string | null | undefined) => {
     if (!v) return null;
     if (typeof v !== "string") return null;
@@ -316,6 +318,22 @@ export default function ProfileMenuSheet({
       if (noticeTimer.current) clearTimeout(noticeTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    statusEntry.current = RNStatusBar.pushStackEntry({
+      barStyle: "light-content",
+      translucent: true,
+      backgroundColor: "transparent",
+      animated: true,
+    } as any);
+    return () => {
+      if (statusEntry.current != null) {
+        RNStatusBar.popStackEntry(statusEntry.current);
+        statusEntry.current = null;
+      }
+    };
+  }, [visible]);
 
   useEffect(() => {
     if (!open) {
@@ -562,8 +580,8 @@ export default function ProfileMenuSheet({
             styles.sheet,
             {
               width: MENU_WIDTH,
-              paddingTop: 14 + Math.max(insets.top, 12),
-              paddingBottom: 16 + Math.max(insets.bottom, 12),
+              paddingTop: 10 + Math.max(insets.top, 12),
+              paddingBottom: 14 + Math.max(insets.bottom, 12),
               transform: [{ translateX: slideX }],
             },
           ]}
@@ -572,90 +590,104 @@ export default function ProfileMenuSheet({
             <View style={styles.topLeft}>
               {editOpen && (
                 <Pressable
-                  style={styles.backBtn}
+                  style={styles.navBtn}
                   onPress={() => {
                     setEditOpen(false);
                     setSaveNotice("");
                   }}
                 >
-                  <ThemedText style={styles.backIcon}>‹</ThemedText>
+                  <Ionicons name="chevron-back" size={18} color="#fff" />
                 </Pressable>
               )}
               <ThemedText style={styles.title}>{headerTitle}</ThemedText>
             </View>
 
-            <Pressable onPress={close} style={styles.closeBtn}>
-              <ThemedText style={styles.closeIcon}>✕</ThemedText>
+            <Pressable onPress={close} style={styles.navBtn}>
+              <Ionicons name="close" size={18} color="#fff" />
             </Pressable>
           </View>
 
           {!editOpen ? (
             <>
-              <View style={styles.header}>
-                <Image
-                  source={avatarSource}
-                  style={styles.headerAvatar}
-                  contentFit="cover"
-                  onError={() => {
-                    if (avatarCanError) setPhotoBroken(true);
-                  }}
-                />
-                <View style={styles.headerText}>
-                  <View style={styles.nameRow}>
+              <View style={styles.hero}>
+                <View style={styles.heroTop}>
+                  <View style={styles.avatarRing}>
+                    <Image
+                      source={avatarSource}
+                      style={styles.headerAvatar}
+                      contentFit="cover"
+                      onError={() => {
+                        if (avatarCanError) setPhotoBroken(true);
+                      }}
+                    />
+                  </View>
+
+                  <View style={styles.heroText}>
                     <ThemedText style={styles.headerName} numberOfLines={1}>
                       {username}
                     </ThemedText>
-                    <ThemedText style={styles.nameSep}>|</ThemedText>
                     <ThemedText style={styles.headerAlias} numberOfLines={1}>
                       {alias}
                     </ThemedText>
+                    {!!userEmail && (
+                      <ThemedText style={styles.headerEmail} numberOfLines={1}>
+                        {userEmail}
+                      </ThemedText>
+                    )}
                   </View>
-
-                  <Pressable
-                    onPress={() => {
-                      if (!auth.currentUser) {
-                        close();
-                        router.replace("/login");
-                        return;
-                      }
-                      openEdit();
-                    }}
-                    style={({ pressed }) => [styles.editLink, pressed && styles.pressed]}
-                  >
-                    <ThemedText style={styles.editLinkText}>{auth.currentUser ? "Edit Profile" : "Log in"}</ThemedText>
-                  </Pressable>
                 </View>
+
+                <Pressable
+                  onPress={() => {
+                    if (!auth.currentUser) {
+                      close();
+                      router.replace("/login");
+                      return;
+                    }
+                    openEdit();
+                  }}
+                  style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressedBtn]}
+                >
+                  <Ionicons name={auth.currentUser ? "create-outline" : "log-in-outline"} size={16} color="#fff" />
+                  <ThemedText style={styles.secondaryText}>{auth.currentUser ? "Edit profile" : "Log in"}</ThemedText>
+                </Pressable>
               </View>
 
-              <View style={styles.divider} />
-
-              {!!auth.currentUser && (
-                <Pressable
-                  style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
-                  onPress={async () => {
-                    close();
-                    await signOut(auth);
-                    router.replace("/login");
-                  }}
-                >
-                  <View style={styles.itemLeft}>
-                    <View style={[styles.iconBadge, styles.logoutBadge]}>
-                      <Ionicons name="log-out-outline" size={MENU_ICON_SIZE} color="#b91c1c" />
+              <View style={styles.section}>
+                {!!auth.currentUser && (
+                  <Pressable
+                    style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+                    onPress={async () => {
+                      close();
+                      await signOut(auth);
+                      router.replace("/login");
+                    }}
+                  >
+                    <View style={styles.itemLeft}>
+                      <View style={[styles.iconBadge, styles.logoutBadge]}>
+                        <Ionicons name="log-out-outline" size={MENU_ICON_SIZE} color="#ff4d4d" />
+                      </View>
+                      <ThemedText style={[styles.itemText, styles.logoutText]}>Log out</ThemedText>
                     </View>
-                    <ThemedText style={[styles.itemText, styles.logoutText]}>Log out</ThemedText>
-                  </View>
-                  <ThemedText style={[styles.chev, styles.logoutText]}>›</ThemedText>
-                </Pressable>
-              )}
+                    <Ionicons name="chevron-forward" size={18} color="#ff4d4d" />
+                  </Pressable>
+                )}
+              </View>
             </>
           ) : (
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.editPad}>
               <View style={styles.card}>
-                <ThemedText style={styles.cardTitle}>Account</ThemedText>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardHeaderLeft}>
+                    <ThemedText style={styles.cardTitle}>Account</ThemedText>
+                    <ThemedText style={styles.cardSub}>Update your details and avatar</ThemedText>
+                  </View>
+                </View>
 
                 <View style={styles.field}>
                   <ThemedText style={styles.label}>Username</ThemedText>
                   <View style={styles.inputWrap}>
+                    <Ionicons name="person-outline" size={16} color="#a3a3a3" />
                     <TextInput
                       value={editName}
                       onChangeText={(t) => {
@@ -663,7 +695,7 @@ export default function ProfileMenuSheet({
                         setSaveNotice("");
                       }}
                       placeholder="Enter username"
-                      placeholderTextColor="#9ca3af"
+                      placeholderTextColor="#6b7280"
                       style={styles.input}
                       autoCapitalize="words"
                     />
@@ -673,6 +705,7 @@ export default function ProfileMenuSheet({
                 <View style={styles.field}>
                   <ThemedText style={styles.label}>Email</ThemedText>
                   <View style={styles.inputWrap}>
+                    <Ionicons name="mail-outline" size={16} color="#a3a3a3" />
                     <TextInput
                       value={editEmail}
                       onChangeText={(t) => {
@@ -680,7 +713,7 @@ export default function ProfileMenuSheet({
                         setSaveNotice("");
                       }}
                       placeholder="Enter email"
-                      placeholderTextColor="#9ca3af"
+                      placeholderTextColor="#6b7280"
                       style={styles.input}
                       autoCapitalize="none"
                       keyboardType="email-address"
@@ -691,6 +724,7 @@ export default function ProfileMenuSheet({
                 <View style={styles.field}>
                   <ThemedText style={styles.label}>Password</ThemedText>
                   <View style={styles.inputWrap}>
+                    <Ionicons name="lock-closed-outline" size={16} color="#a3a3a3" />
                     <TextInput
                       value={editPassword}
                       onChangeText={(t) => {
@@ -698,7 +732,7 @@ export default function ProfileMenuSheet({
                         setSaveNotice("");
                       }}
                       placeholder="New password (min 6)"
-                      placeholderTextColor="#9ca3af"
+                      placeholderTextColor="#6b7280"
                       style={styles.input}
                       secureTextEntry
                     />
@@ -707,7 +741,12 @@ export default function ProfileMenuSheet({
                 </View>
 
                 <View style={styles.field}>
-                  <ThemedText style={styles.label}>Choose Avatar</ThemedText>
+                  <View style={styles.avatarHeadRow}>
+                    <ThemedText style={styles.label}>Choose Avatar</ThemedText>
+                    <View style={styles.avatarPreview}>
+                      <Image source={editAvatarSource} style={styles.previewImg} contentFit="cover" />
+                    </View>
+                  </View>
 
                   <View style={styles.grid}>
                     {AVATAR_CHOICES.map((a) => {
@@ -722,7 +761,9 @@ export default function ProfileMenuSheet({
                           style={({ pressed }) => [styles.avatarOption, selected && styles.avatarOptionSelected, pressed && styles.itemPressed]}
                         >
                           <Image source={a.src} style={styles.avatarImg} contentFit="cover" />
-                          <ThemedText style={styles.avatarLbl}>{a.label}</ThemedText>
+                          <View style={[styles.avatarPill, selected && styles.avatarPillSelected]}>
+                            <ThemedText style={[styles.avatarLbl, selected && styles.avatarLblSelected]}>{a.label}</ThemedText>
+                          </View>
                         </Pressable>
                       );
                     })}
@@ -738,6 +779,7 @@ export default function ProfileMenuSheet({
                   disabled={saving || !auth.currentUser || !hasChanges}
                   onPress={performSave}
                 >
+                  <Ionicons name="save-outline" size={16} color="white" />
                   <ThemedText style={styles.primaryText}>{saving ? "SAVING..." : "SAVE CHANGES"}</ThemedText>
                 </Pressable>
 
@@ -754,7 +796,7 @@ export default function ProfileMenuSheet({
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, justifyContent: "flex-start" },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.38)" },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.78)" },
   dismiss: { ...StyleSheet.absoluteFillObject },
 
   sheet: {
@@ -762,72 +804,82 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     right: 0,
-    height: "100%",
-    backgroundColor: "white",
-    borderTopLeftRadius: 22,
-    borderBottomLeftRadius: 22,
+    height: "98%",
+    backgroundColor: "#000000",
     borderLeftWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#000000",
     paddingHorizontal: 14,
     shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 24,
-    shadowOffset: { width: -8, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 28,
+    shadowOffset: { width: -10, height: 0 },
   },
 
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 },
-  topLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { fontSize: 14, color: "#111", letterSpacing: 0.4, fontFamily: "Poppins_500Medium" },
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingBottom: 10, paddingTop: 4 },
+  topLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  title: { fontSize: 15, color: "#fff", letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
 
-  backBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: "#f3f4f6",
+  navBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "#141414",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#242424",
     alignItems: "center",
     justifyContent: "center",
   },
-  backIcon: { fontSize: 20, marginTop: -2, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  hero: {
+    borderWidth: 1,
+    borderColor: "#242424",
+    borderRadius: 18,
+    padding: 12,
+    backgroundColor: "#111111",
+  },
+  heroTop: { flexDirection: "row", alignItems: "center" },
+  avatarRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    padding: 2,
+    backgroundColor: "#0b0b0b",
+    borderWidth: 1,
+    borderColor: "#242424",
+  },
+  headerAvatar: { width: "100%", height: "100%", borderRadius: 16, backgroundColor: "#1f1f1f" },
+  heroText: { marginLeft: 12, flex: 1, minWidth: 0 },
+  headerName: { fontSize: 16, color: "#fff", fontFamily: "Poppins_600SemiBold" },
+  headerAlias: { fontSize: 12, color: "#b3b3b3", fontFamily: "Poppins_400Regular", marginTop: 2 },
+  headerEmail: { fontSize: 12, color: "#8a8a8a", fontFamily: "Poppins_400Regular", marginTop: 2 },
+
+  secondaryBtn: {
+    marginTop: 10,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#242424",
+    backgroundColor: "#141414",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f3f4f6",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    gap: 8,
   },
-  closeIcon: { fontSize: 16, color: "#111", fontFamily: "Poppins_600SemiBold" },
+  secondaryText: { fontSize: 12, color: "#fff", fontFamily: "Poppins_500Medium" },
+  pressedBtn: { opacity: 0.9, transform: [{ scale: 0.99 }] },
 
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 2, paddingVertical: 10 },
-  headerAvatar: { width: 44, height: 44, borderRadius: 12, backgroundColor: "#e5e7eb" },
-  headerText: { marginLeft: 12, flex: 1, minWidth: 0 },
-
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
-  headerName: { fontSize: 16, color: "#111", fontFamily: "Poppins_600SemiBold", maxWidth: 140 },
-  nameSep: { fontSize: 13, color: "#9ca3af", fontFamily: "Poppins_400Regular" },
-  headerAlias: { fontSize: 12, color: "#6b7280", fontFamily: "Poppins_400Regular", flex: 1, minWidth: 0 },
-
-  editLink: { marginTop: 6, alignSelf: "flex-start" },
-  editLinkText: { fontSize: 12, color: "#111", textDecorationLine: "underline", fontFamily: "Poppins_400Regular" },
-
-  divider: { height: 1, backgroundColor: "rgba(0,0,0,0.06)", marginVertical: 10 },
+  section: { marginTop: 10 },
 
   item: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 14,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "white",
-    marginBottom: 10,
+    borderColor: "#242424",
+    backgroundColor: "#111111",
   },
   itemPressed: { transform: [{ scale: 0.99 }], opacity: 0.92 },
 
@@ -836,93 +888,109 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 12,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#141414",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#242424",
     alignItems: "center",
     justifyContent: "center",
   },
 
-  itemText: { fontSize: 14, color: "#111", fontFamily: "Poppins_500Medium" },
-  chev: { fontSize: 18, color: "#9ca3af", marginTop: -1, fontFamily: "Poppins_600SemiBold" },
+  itemText: { fontSize: 14, color: "#fff", fontFamily: "Poppins_500Medium" },
 
-  logoutText: { color: "#b91c1c", fontFamily: "Poppins_500Medium" },
-  logoutBadge: { backgroundColor: "#fef2f2", borderColor: "#fecaca" },
+  logoutText: { color: "#ff4d4d", fontFamily: "Poppins_500Medium" },
+  logoutBadge: { backgroundColor: "#1a0b0b", borderColor: "#3a1a1a" },
 
-  pressed: { opacity: 0.75 },
-
-  editPad: { paddingBottom: 30 },
+  editPad: { paddingBottom: 26 },
   card: {
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 16,
+    borderColor: "#242424",
+    borderRadius: 18,
     padding: 12,
-    backgroundColor: "white",
+    backgroundColor: "#111111",
     marginBottom: 10,
   },
-  cardTitle: { fontSize: 13, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
-  field: { marginTop: 10 },
-  label: { fontSize: 12, color: "#6b7280", marginBottom: 6, fontFamily: "Poppins_400Regular" },
+  cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  cardHeaderLeft: { flex: 1, minWidth: 0, paddingRight: 10 },
+  cardTitle: { fontSize: 13, color: "#fff", fontFamily: "Poppins_600SemiBold" },
+  cardSub: { fontSize: 11, color: "#b3b3b3", marginTop: 2, fontFamily: "Poppins_400Regular" },
+
+  field: { marginTop: 12 },
+  label: { fontSize: 12, color: "#b3b3b3", marginBottom: 8, fontFamily: "Poppins_400Regular" },
 
   inputWrap: {
+    height: 44,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#242424",
     borderRadius: 14,
-    backgroundColor: "white",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-  },
-  input: { fontSize: 14, color: "#111", fontFamily: "Poppins_400Regular" },
-
-  photoRow: {
+    backgroundColor: "#0f0f0f",
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "white",
+    gap: 8,
   },
-  editAvatar: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#e5e7eb" },
-  photoMeta: { flex: 1 },
-  photoTitle: { fontSize: 13, color: "#111", fontFamily: "Poppins_600SemiBold" },
-  photoSub: { fontSize: 12, color: "#6b7280", marginTop: 2, fontFamily: "Poppins_400Regular" },
+  input: { flex: 1, fontSize: 14, color: "#fff", fontFamily: "Poppins_400Regular", paddingVertical: 0 },
+
+  avatarHeadRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  avatarPreview: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#242424",
+    backgroundColor: "#141414",
+    overflow: "hidden",
+  },
+  previewImg: { width: "100%", height: "100%" },
 
   grid: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 10 },
   avatarOption: {
-    width: "47%",
-    borderRadius: 14,
+    width: "30.5%",
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "white",
-    padding: 10,
-    paddingRight: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  avatarOptionSelected: { borderColor: "#111", borderWidth: 2 },
-  avatarImg: { width: 34, height: 34, borderRadius: 12, backgroundColor: "#e5e7eb" },
-  avatarLbl: { fontSize: 12, color: "#111", fontFamily: "Poppins_500Medium" },
-
-  primary: {
-    marginTop: 12,
-    backgroundColor: "#0a0a0a",
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderColor: "#242424",
+    backgroundColor: "#0f0f0f",
+    paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
+  },
+  avatarOptionSelected: { borderColor: "#fff", borderWidth: 2 },
+  avatarImg: { width: 38, height: 38, borderRadius: 14, backgroundColor: "#1f1f1f" },
+  avatarPill: {
+    marginTop: 8,
+    paddingHorizontal: 8,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: "#141414",
+    borderWidth: 1,
+    borderColor: "#242424",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarPillSelected: { backgroundColor: "#fff", borderColor: "#fff" },
+  avatarLbl: { fontSize: 11, color: "#fff", fontFamily: "Poppins_500Medium" },
+  avatarLblSelected: { color: "#111" },
+
+  primary: {
+    marginTop: 14,
+    height: 44,
+    backgroundColor: "#000000",
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#000000",
   },
   primaryPressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
   primaryDisabled: { opacity: 0.5 },
   primaryText: { color: "white", fontSize: 12, letterSpacing: 0.6, fontFamily: "Poppins_600SemiBold" },
 
   notice: { marginTop: 10, fontSize: 12, lineHeight: 18, fontFamily: "Poppins_400Regular" },
-  ok: { color: "#16a34a" },
-  bad: { color: "#b91c1c" },
-  muted: { color: "#6b7280" },
+  ok: { color: "#22c55e" },
+  bad: { color: "#ff4d4d" },
+  muted: { color: "#a3a3a3" },
   hint: { marginTop: 8 },
 });
