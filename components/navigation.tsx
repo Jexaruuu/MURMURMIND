@@ -246,8 +246,8 @@ export default function Navigation() {
             const data = d.data() as Record<string, unknown>;
 
             const type: NotifItem["type"] = data?.type === "reply" ? "reply" : "reaction";
-            const createdAtMs: number = typeof data?.createdAtMs === "number" ? data.createdAtMs : 0;
-            const readAtMs: number | null = typeof data?.readAtMs === "number" ? data.readAtMs : null;
+            const createdAtMs: number = typeof data?.createdAtMs === "number" ? (data as any).createdAtMs : 0;
+            const readAtMs: number | null = typeof data?.readAtMs === "number" ? (data as any).readAtMs : null;
 
             return { id: d.id, type, createdAtMs, readAtMs };
           })

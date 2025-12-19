@@ -23,6 +23,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  where,
 } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
@@ -377,6 +378,8 @@ export default function Menu() {
   const thought = useMemo(() => THOUGHTS[tIndex % THOUGHTS.length], [tIndex]);
   const insets = useSafeAreaInsets();
 
+  const [feedMode, setFeedMode] = useState<"all" | "mine">("all");
+
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [myUid, setMyUid] = useState<string | null>(auth.currentUser?.uid ? String(auth.currentUser.uid) : null);
   const [myPhotoUrl, setMyPhotoUrl] = useState<string | null>(null);
@@ -622,6 +625,28 @@ export default function Menu() {
     return `@${h}`;
   };
 
+  const notifIdPostReaction = (postId: string, fromUid: string) => `react_post_${postId}_${fromUid}`;
+  const notifIdReplyReaction = (postId: string, replyId: string, fromUid: string) => `react_reply_${postId}_${replyId}_${fromUid}`;
+  const notifIdReplyCreated = (postId: string, replyId: string, toUid: string) => `reply_${postId}_${replyId}_${toUid}`;
+
+  const writeNotif = async (toUid: string, notifId: string, payload: any) => {
+    const to = (toUid || "").trim();
+    const id = (notifId || "").trim();
+    if (!to || !id) return;
+    try {
+      await setDoc(doc(db, "users", to, "notifications", id), payload as any, { merge: true });
+    } catch {}
+  };
+
+  const deleteNotif = async (toUid: string, notifId: string) => {
+    const to = (toUid || "").trim();
+    const id = (notifId || "").trim();
+    if (!to || !id) return;
+    try {
+      await deleteDoc(doc(db, "users", to, "notifications", id));
+    } catch {}
+  };
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       const uid = u?.uid ? String(u.uid) : null;
@@ -629,9 +654,10 @@ export default function Menu() {
       setMyPhotoUrl(null);
       setMyPhotoVer(0);
       setFortuneDismissedDay(null);
+      if (!uid && feedMode === "mine") setFeedMode("all");
     });
     return () => unsub();
-  }, []);
+  }, [feedMode]);
 
   useEffect(() => {
     if (!myUid) return;
@@ -657,7 +683,16 @@ export default function Menu() {
   }, [myUid]);
 
   useEffect(() => {
-    const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(50));
+    if (feedMode === "mine" && !myUid) {
+      setPosts([]);
+      return;
+    }
+
+    const q =
+      feedMode === "mine"
+        ? query(collection(db, "posts"), where("uid", "==", myUid), limit(200))
+        : query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(50));
+
     const unsub = onSnapshot(q, (snap) => {
       const next: PostItem[] = snap.docs
         .map((d) => {
@@ -681,7 +716,12 @@ export default function Menu() {
           return hasText || hasMedia;
         });
 
+      if (feedMode === "mine") {
+        next.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      }
+
       setPosts(next);
+
       if (threadPostId && !next.some((p) => p.id === threadPostId)) {
         setThreadPostId(null);
         setReplies([]);
@@ -696,7 +736,7 @@ export default function Menu() {
     });
 
     return () => unsub();
-  }, [threadPostId, editingPostId]);
+  }, [feedMode, myUid, threadPostId, editingPostId]);
 
   useEffect(() => {
     if (!threadPostId) {
@@ -935,10 +975,10 @@ export default function Menu() {
 
   const headerSubtitle = useMemo(() => {
     const count = posts.length;
-    if (count === 0) return "No posts yet. Tap Post to write your first thought.";
-    if (count === 1) return "1 post in your feed";
-    return `${count} posts in your feed`;
-  }, [posts.length]);
+    if (count === 0) return feedMode === "mine" ? "No posts yet. Tap Post to write your first thought." : "No posts yet. Tap Post to write your first thought.";
+    if (count === 1) return feedMode === "mine" ? "1 post in your thoughts" : "1 post in your feed";
+    return feedMode === "mine" ? `${count} posts in your thoughts` : `${count} posts in your feed`;
+  }, [posts.length, feedMode]);
 
   const closeActions = () => {
     if (deleting) return;
@@ -1130,7 +1170,42 @@ export default function Menu() {
         createdAtMs: Date.now(),
       };
 
-      await addDoc(collection(db, "posts", replyingPostId, "replies"), payload);
+      const ref = await addDoc(collection(db, "posts", replyingPostId, "replies"), payload);
+      const replyId = ref.id;
+
+      const postOwnerUid = (posts.find((x) => x.id === replyingPostId)?.uid || "").trim();
+      const parentOwnerUid = replyParentId ? (replies.find((x) => x.id === replyParentId)?.uid || "").trim() : "";
+
+      if (postOwnerUid && postOwnerUid !== myUid) {
+        const notifId = notifIdReplyCreated(replyingPostId, replyId, postOwnerUid);
+        await writeNotif(postOwnerUid, notifId, {
+          type: "reply",
+          fromUid: myUid,
+          toUid: postOwnerUid,
+          postId: replyingPostId,
+          replyId,
+          parentId: replyParentId || null,
+          createdAt: serverTimestamp(),
+          createdAtMs: Date.now(),
+          readAtMs: null,
+        } as any);
+      }
+
+      if (parentOwnerUid && parentOwnerUid !== myUid && parentOwnerUid !== postOwnerUid) {
+        const notifId = notifIdReplyCreated(replyingPostId, replyId, parentOwnerUid);
+        await writeNotif(parentOwnerUid, notifId, {
+          type: "reply",
+          fromUid: myUid,
+          toUid: parentOwnerUid,
+          postId: replyingPostId,
+          replyId,
+          parentId: replyParentId || null,
+          createdAt: serverTimestamp(),
+          createdAtMs: Date.now(),
+          readAtMs: null,
+        } as any);
+      }
+
       closeReply();
     } catch {
       setSendingReply(false);
@@ -1194,7 +1269,7 @@ export default function Menu() {
   const togglePostLike = async (p: PostItem) => {
     if (!ensureAuthed()) return;
     if (!myUid) return;
-    const owner = typeof p.uid === "string" ? p.uid : "";
+    const owner = typeof p.uid === "string" ? p.uid.trim() : "";
     if (owner && owner === myUid) return;
 
     const before = postLikeById[p.id] || { count: 0, liked: false };
@@ -1204,10 +1279,12 @@ export default function Menu() {
     setPostLikeById((prev) => ({ ...prev, [p.id]: { count: optimisticCount, liked: nextLiked } }));
 
     const likeRef = doc(db, "posts", p.id, "likes", myUid);
+    const notifId = owner ? notifIdPostReaction(p.id, myUid) : "";
 
     try {
       if (before.liked) {
         await deleteDoc(likeRef);
+        if (owner && owner !== myUid) await deleteNotif(owner, notifId);
       } else {
         await setDoc(
           likeRef,
@@ -1218,6 +1295,18 @@ export default function Menu() {
           } as any,
           { merge: true }
         );
+
+        if (owner && owner !== myUid) {
+          await writeNotif(owner, notifId, {
+            type: "reaction",
+            fromUid: myUid,
+            toUid: owner,
+            postId: p.id,
+            createdAt: serverTimestamp(),
+            createdAtMs: Date.now(),
+            readAtMs: null,
+          } as any);
+        }
       }
     } catch {
       setPostLikeById((prev) => ({ ...prev, [p.id]: before }));
@@ -1227,7 +1316,7 @@ export default function Menu() {
   const toggleReplyLike = async (postId: string, r: ReplyItem) => {
     if (!ensureAuthed()) return;
     if (!myUid) return;
-    const owner = typeof r.uid === "string" ? r.uid : "";
+    const owner = typeof r.uid === "string" ? r.uid.trim() : "";
     if (owner && owner === myUid) return;
 
     const key = `${postId}||${r.id}`;
@@ -1238,10 +1327,12 @@ export default function Menu() {
     setReplyLikeByKey((prev) => ({ ...prev, [key]: { count: optimisticCount, liked: nextLiked } }));
 
     const likeRef = doc(db, "posts", postId, "replies", r.id, "likes", myUid);
+    const notifId = owner ? notifIdReplyReaction(postId, r.id, myUid) : "";
 
     try {
       if (before.liked) {
         await deleteDoc(likeRef);
+        if (owner && owner !== myUid) await deleteNotif(owner, notifId);
       } else {
         await setDoc(
           likeRef,
@@ -1252,6 +1343,19 @@ export default function Menu() {
           } as any,
           { merge: true }
         );
+
+        if (owner && owner !== myUid) {
+          await writeNotif(owner, notifId, {
+            type: "reaction",
+            fromUid: myUid,
+            toUid: owner,
+            postId,
+            replyId: r.id,
+            createdAt: serverTimestamp(),
+            createdAtMs: Date.now(),
+            readAtMs: null,
+          } as any);
+        }
       }
     } catch {
       setReplyLikeByKey((prev) => ({ ...prev, [key]: before }));
@@ -1309,11 +1413,7 @@ export default function Menu() {
                 <View style={{ flex: 1 }} />
 
                 <Pressable
-                  style={({ pressed }) => [
-                    styles.heartBtn,
-                    !canReact && styles.heartBtnDisabled,
-                    pressed && styles.pressed,
-                  ]}
+                  style={({ pressed }) => [styles.heartBtn, !canReact && styles.heartBtnDisabled, pressed && styles.pressed]}
                   onPress={() => toggleReplyLike(postId, r)}
                   disabled={!canReact}
                 >
@@ -1438,6 +1538,21 @@ export default function Menu() {
     return tag ? `Your post • ${tag}` : "Your post";
   }, [editingPostId, posts]);
 
+  const isMineActive = feedMode === "mine";
+  const canUseMine = !!auth.currentUser && !!myUid;
+
+  const setMine = () => {
+    if (!canUseMine) {
+      router.push("/login");
+      return;
+    }
+    setFeedMode("mine");
+  };
+
+  const setAll = () => {
+    setFeedMode("all");
+  };
+
   return (
     <ThemedView style={styles.container}>
       <StatusBar style="light" backgroundColor="#000" translucent />
@@ -1491,8 +1606,26 @@ export default function Menu() {
         </View>
 
         <View style={styles.sectionHead}>
-          <ThemedText style={styles.sectionTitle}>Latest posts</ThemedText>
-          <ThemedText style={styles.sectionHint}>Most recent first</ThemedText>
+          <ThemedText style={styles.sectionTitle}>{isMineActive ? "My thoughts" : "Latest posts"}</ThemedText>
+          <View style={styles.sectionRight}>
+            <ThemedText style={styles.sectionHint}>{isMineActive ? "Only yours" : "Most recent first"}</ThemedText>
+            <View style={styles.filterRow}>
+              <Pressable style={({ pressed }) => [styles.filterPill, feedMode === "all" && styles.filterPillActive, pressed && styles.pressed]} onPress={setAll}>
+                <ThemedText style={[styles.filterPillText, feedMode === "all" && styles.filterPillTextActive]}>All</ThemedText>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.filterPill,
+                  feedMode === "mine" && styles.filterPillActive,
+                  !canUseMine && styles.filterPillDisabled,
+                  pressed && styles.pressed,
+                ]}
+                onPress={setMine}
+              >
+                <ThemedText style={[styles.filterPillText, feedMode === "mine" && styles.filterPillTextActive]}>My thoughts</ThemedText>
+              </Pressable>
+            </View>
+          </View>
         </View>
 
         <View style={styles.feedWrap}>
@@ -1571,11 +1704,7 @@ export default function Menu() {
                     <View style={{ flex: 1 }} />
 
                     <Pressable
-                      style={({ pressed }) => [
-                        styles.heartBtnPost,
-                        !canReact && styles.heartBtnDisabled,
-                        pressed && styles.pressed,
-                      ]}
+                      style={({ pressed }) => [styles.heartBtnPost, !canReact && styles.heartBtnDisabled, pressed && styles.pressed]}
                       onPress={() => togglePostLike(p)}
                       disabled={!canReact}
                     >
@@ -1881,9 +2010,25 @@ const styles = StyleSheet.create({
   thoughtBtnText: { color: "#111", fontSize: 12, letterSpacing: 0.3, textTransform: "uppercase", fontFamily: "Poppins_600SemiBold" },
   thoughtText: { color: "white", lineHeight: 22, marginTop: 2, fontFamily: "Poppins_400Regular" },
 
-  sectionHead: { marginTop: 14, paddingHorizontal: 2, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  sectionHead: { marginTop: 14, paddingHorizontal: 2, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 10 },
   sectionTitle: { fontSize: 13, color: "#111", letterSpacing: 0.3, fontFamily: "Poppins_600SemiBold" },
   sectionHint: { fontSize: 12, color: "#6b7280", fontFamily: "Poppins_400Regular" },
+  sectionRight: { flexDirection: "row", alignItems: "center", gap: 10 },
+  filterRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  filterPill: {
+    height: 28,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterPillActive: { backgroundColor: "#111", borderColor: "#111" },
+  filterPillDisabled: { opacity: 0.55 },
+  filterPillText: { fontSize: 11, color: "#111", letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
+  filterPillTextActive: { color: "white" },
 
   feedWrap: { marginTop: 10, gap: 10 },
 
