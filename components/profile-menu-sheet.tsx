@@ -314,6 +314,16 @@ export default function ProfileMenuSheet({
     noticeTimer.current = setTimeout(() => setSaveNotice(""), 2600);
   };
 
+  const goLogin = () => {
+    try {
+      router.replace("/login");
+    } catch {
+      try {
+        router.push("/login");
+      } catch {}
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (noticeTimer.current) clearTimeout(noticeTimer.current);
@@ -547,7 +557,7 @@ export default function ProfileMenuSheet({
       if (didPasswordChange) {
         close();
         await signOut(auth);
-        router.replace("/login");
+        goLogin();
         return;
       }
 
@@ -645,7 +655,7 @@ export default function ProfileMenuSheet({
                   onPress={() => {
                     if (!auth.currentUser) {
                       close();
-                      router.replace("/login");
+                      goLogin();
                       return;
                     }
                     openEdit();
@@ -664,7 +674,7 @@ export default function ProfileMenuSheet({
                     onPress={async () => {
                       close();
                       await signOut(auth);
-                      router.replace("/login");
+                      goLogin();
                     }}
                   >
                     <View style={styles.itemLeft}>
