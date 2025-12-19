@@ -20,7 +20,7 @@ const MENU_ICON_SIZE = 18;
 
 const ASSET_PREFIX = "asset:";
 
-const BOTTOM_NAV_GAP =  -10;
+const BOTTOM_NAV_GAP = -10;
 
 const AVATAR_CHOICES = [
   { key: `${ASSET_PREFIX}murmurblack`, label: "Bla", src: require("@/assets/images/murmurblack.png") },
@@ -204,8 +204,7 @@ const aliasForUid = (uidLike: string | null | undefined) => {
   const seed = hashStr(`alias|${uid}`);
   const a = ALIAS_ADJ[seed % ALIAS_ADJ.length];
   const n = ALIAS_NOUN[Math.floor(seed / ALIAS_ADJ.length) % ALIAS_NOUN.length];
-  const tag = uniqueTagForUid(uid);
-  return `${a} ${n} • ${tag}`;
+  return `${a} ${n}`;
 };
 
 export default function ProfileMenuSheet({

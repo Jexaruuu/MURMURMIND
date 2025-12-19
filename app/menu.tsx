@@ -6,12 +6,24 @@ import { auth, db } from "@/firebase";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold } from "@expo-google-fonts/poppins";
+import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { onAuthStateChanged } from "firebase/auth";
-import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
@@ -350,6 +362,9 @@ type ReplyItem = {
 };
 
 type PhotoState = { url: string | null; ver: number };
+type LikeState = { count: number; liked: boolean };
+
+const HEART_PINK = "#EC4899";
 
 export default function Menu() {
   useFonts({
@@ -370,6 +385,11 @@ export default function Menu() {
   const [userPhotoByUid, setUserPhotoByUid] = useState<Record<string, string | null>>({});
   const [userPhotoVerByUid, setUserPhotoVerByUid] = useState<Record<string, number>>({});
   const userPhotoUnsubs = useRef<Record<string, () => void>>({});
+
+  const [postLikeById, setPostLikeById] = useState<Record<string, LikeState>>({});
+  const [replyLikeByKey, setReplyLikeByKey] = useState<Record<string, LikeState>>({});
+  const postLikeUnsubs = useRef<Record<string, () => void>>({});
+  const replyLikeUnsubs = useRef<Record<string, () => void>>({});
 
   const [actionOpen, setActionOpen] = useState(false);
   const [actionPostId, setActionPostId] = useState<string | null>(null);
@@ -571,8 +591,7 @@ export default function Menu() {
     const seed = hashStr(`alias|${uid}`);
     const a = ALIAS_ADJ[seed % ALIAS_ADJ.length];
     const n = ALIAS_NOUN[Math.floor(seed / ALIAS_ADJ.length) % ALIAS_NOUN.length];
-    const tag = uniqueTagForUid(uid);
-    return `${a} ${n} • ${tag}`;
+    return `${a} ${n}`;
   };
 
   const handleForUid = (uidLike: string | null | undefined) => {
@@ -774,6 +793,126 @@ export default function Menu() {
     };
   }, []);
 
+  useEffect(() => {
+    const wanted = new Set<string>();
+    for (const p of posts) {
+      if (p?.id) wanted.add(p.id);
+    }
+
+    for (const postId of wanted) {
+      if (postLikeUnsubs.current[postId]) continue;
+
+      const unsub = onSnapshot(
+        collection(db, "posts", postId, "likes"),
+        (snap) => {
+          const count = snap.size || 0;
+          const liked = !!myUid && snap.docs.some((d) => d.id === myUid);
+          setPostLikeById((prev) => {
+            const curr = prev[postId];
+            if (curr && curr.count === count && curr.liked === liked) return prev;
+            return { ...prev, [postId]: { count, liked } };
+          });
+        },
+        () => {
+          setPostLikeById((prev) => {
+            const curr = prev[postId];
+            if (curr && curr.count === 0 && curr.liked === false) return prev;
+            return { ...prev, [postId]: { count: 0, liked: false } };
+          });
+        }
+      );
+
+      postLikeUnsubs.current[postId] = unsub;
+    }
+
+    for (const postId of Object.keys(postLikeUnsubs.current)) {
+      if (wanted.has(postId)) continue;
+      try {
+        postLikeUnsubs.current[postId]();
+      } catch {}
+      delete postLikeUnsubs.current[postId];
+      setPostLikeById((prev) => {
+        if (!(postId in prev)) return prev;
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      });
+    }
+  }, [posts, myUid]);
+
+  useEffect(() => {
+    return () => {
+      for (const k of Object.keys(postLikeUnsubs.current)) {
+        try {
+          postLikeUnsubs.current[k]();
+        } catch {}
+      }
+      postLikeUnsubs.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    const wanted = new Set<string>();
+    if (threadPostId) {
+      for (const r of replies) {
+        if (r?.id) wanted.add(`${threadPostId}||${r.id}`);
+      }
+    }
+
+    for (const key of wanted) {
+      if (replyLikeUnsubs.current[key]) continue;
+      const [postId, replyId] = key.split("||");
+      if (!postId || !replyId) continue;
+
+      const unsub = onSnapshot(
+        collection(db, "posts", postId, "replies", replyId, "likes"),
+        (snap) => {
+          const count = snap.size || 0;
+          const liked = !!myUid && snap.docs.some((d) => d.id === myUid);
+          setReplyLikeByKey((prev) => {
+            const curr = prev[key];
+            if (curr && curr.count === count && curr.liked === liked) return prev;
+            return { ...prev, [key]: { count, liked } };
+          });
+        },
+        () => {
+          setReplyLikeByKey((prev) => {
+            const curr = prev[key];
+            if (curr && curr.count === 0 && curr.liked === false) return prev;
+            return { ...prev, [key]: { count: 0, liked: false } };
+          });
+        }
+      );
+
+      replyLikeUnsubs.current[key] = unsub;
+    }
+
+    for (const key of Object.keys(replyLikeUnsubs.current)) {
+      if (wanted.has(key)) continue;
+      try {
+        replyLikeUnsubs.current[key]();
+      } catch {}
+      delete replyLikeUnsubs.current[key];
+      setReplyLikeByKey((prev) => {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  }, [threadPostId, replies, myUid]);
+
+  useEffect(() => {
+    return () => {
+      for (const k of Object.keys(replyLikeUnsubs.current)) {
+        try {
+          replyLikeUnsubs.current[k]();
+        } catch {}
+      }
+      replyLikeUnsubs.current = {};
+    };
+  }, []);
+
   const quickName = useMemo(() => {
     const u = auth.currentUser;
     const n = typeof u?.displayName === "string" ? u.displayName.trim() : "";
@@ -952,6 +1091,81 @@ export default function Menu() {
     return m;
   }, [replies]);
 
+  const ensureAuthed = () => {
+    if (!auth.currentUser) {
+      router.replace("/login");
+      return false;
+    }
+    return true;
+  };
+
+  const togglePostLike = async (p: PostItem) => {
+    if (!ensureAuthed()) return;
+    if (!myUid) return;
+    const owner = typeof p.uid === "string" ? p.uid : "";
+    if (owner && owner === myUid) return;
+
+    const before = postLikeById[p.id] || { count: 0, liked: false };
+    const nextLiked = !before.liked;
+    const optimisticCount = Math.max(0, (before.count || 0) + (nextLiked ? 1 : -1));
+
+    setPostLikeById((prev) => ({ ...prev, [p.id]: { count: optimisticCount, liked: nextLiked } }));
+
+    const likeRef = doc(db, "posts", p.id, "likes", myUid);
+
+    try {
+      if (before.liked) {
+        await deleteDoc(likeRef);
+      } else {
+        await setDoc(
+          likeRef,
+          {
+            uid: myUid,
+            createdAt: serverTimestamp(),
+            createdAtMs: Date.now(),
+          } as any,
+          { merge: true }
+        );
+      }
+    } catch {
+      setPostLikeById((prev) => ({ ...prev, [p.id]: before }));
+    }
+  };
+
+  const toggleReplyLike = async (postId: string, r: ReplyItem) => {
+    if (!ensureAuthed()) return;
+    if (!myUid) return;
+    const owner = typeof r.uid === "string" ? r.uid : "";
+    if (owner && owner === myUid) return;
+
+    const key = `${postId}||${r.id}`;
+    const before = replyLikeByKey[key] || { count: 0, liked: false };
+    const nextLiked = !before.liked;
+    const optimisticCount = Math.max(0, (before.count || 0) + (nextLiked ? 1 : -1));
+
+    setReplyLikeByKey((prev) => ({ ...prev, [key]: { count: optimisticCount, liked: nextLiked } }));
+
+    const likeRef = doc(db, "posts", postId, "replies", r.id, "likes", myUid);
+
+    try {
+      if (before.liked) {
+        await deleteDoc(likeRef);
+      } else {
+        await setDoc(
+          likeRef,
+          {
+            uid: myUid,
+            createdAt: serverTimestamp(),
+            createdAtMs: Date.now(),
+          } as any,
+          { merge: true }
+        );
+      }
+    } catch {
+      setReplyLikeByKey((prev) => ({ ...prev, [key]: before }));
+    }
+  };
+
   const renderFlatReplyList = (postId: string) => {
     if (!replies.length) return null;
 
@@ -979,6 +1193,14 @@ export default function Menu() {
 
       const canReplyToThisReply = !!auth.currentUser && !isMe;
 
+      const likeKey = `${postId}||${r.id}`;
+      const likeState = replyLikeByKey[likeKey] || { count: 0, liked: false };
+      const likeCount = Math.max(0, likeState.count || 0);
+      const liked = !!likeState.liked;
+
+      const canReact = !!auth.currentUser && !!myUid && !isMe;
+      const showCount = likeCount > 0;
+
       return (
         <View key={r.id} style={styles.replyItemWrap}>
           {showPostReplySeparator && <View style={styles.postReplySeparator} />}
@@ -993,6 +1215,20 @@ export default function Menu() {
                 {!!uidShort && <ThemedText style={styles.replyHandle}>{uidShort}</ThemedText>}
                 {!!time && <ThemedText style={styles.replyTime}>{time}</ThemedText>}
                 <View style={{ flex: 1 }} />
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.heartBtn,
+                    !canReact && styles.heartBtnDisabled,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => toggleReplyLike(postId, r)}
+                  disabled={!canReact}
+                >
+                  <Ionicons name={canReact && liked ? "heart" : "heart-outline"} size={16} color={canReact && liked ? HEART_PINK : "#111"} />
+                  {showCount ? <ThemedText style={styles.heartCount}>{likeCount}</ThemedText> : null}
+                </Pressable>
+
                 {canReplyToThisReply ? (
                   <Pressable style={({ pressed }) => [styles.replyBtn, pressed && styles.pressed]} onPress={() => openReplyForReply(postId, r)}>
                     <ThemedText style={styles.replyBtnText}>Reply</ThemedText>
@@ -1190,6 +1426,13 @@ export default function Menu() {
 
               const postTextColor = typeof p.textColor === "string" && p.textColor.trim() ? p.textColor.trim() : "#111";
 
+              const likeState = postLikeById[p.id] || { count: 0, liked: false };
+              const likeCount = Math.max(0, likeState.count || 0);
+              const liked = !!likeState.liked;
+
+              const canReact = !!auth.currentUser && !!myUid && !isMe;
+              const showCount = likeCount > 0;
+
               return (
                 <View key={p.id} style={styles.post}>
                   <View style={styles.postHead}>
@@ -1225,6 +1468,19 @@ export default function Menu() {
                     </Pressable>
 
                     <View style={{ flex: 1 }} />
+
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.heartBtnPost,
+                        !canReact && styles.heartBtnDisabled,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => togglePostLike(p)}
+                      disabled={!canReact}
+                    >
+                      <Ionicons name={canReact && liked ? "heart" : "heart-outline"} size={18} color={canReact && liked ? HEART_PINK : "#111"} />
+                      {showCount ? <ThemedText style={styles.heartCount}>{likeCount}</ThemedText> : null}
+                    </Pressable>
 
                     <View style={styles.pill}>
                       <ThemedText style={styles.pillText}>{mediaLabelFor(p)}</ThemedText>
@@ -1507,6 +1763,30 @@ const styles = StyleSheet.create({
   threadBtnGhost: { backgroundColor: "white", borderColor: "#e5e7eb" },
   threadBtnText: { color: "white", fontSize: 12, letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
   threadBtnTextGhost: { color: "#111", fontSize: 12, letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
+
+  heartBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  heartBtnPost: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  heartBtnDisabled: { opacity: 0.45 },
+  heartCount: { fontSize: 12, color: "#111", fontFamily: "Poppins_600SemiBold" },
 
   threadBox: { marginTop: 12, borderTopWidth: 1, borderTopColor: "rgba(0,0,0,0.06)", paddingTop: 12 },
   threadEmpty: { paddingVertical: 8 },
