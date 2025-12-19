@@ -11,7 +11,7 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { onAuthStateChanged } from "firebase/auth";
-import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
@@ -97,6 +97,70 @@ const THOUGHTS = [
   "You don’t need permission to choose yourself.",
   "Let it be easy sometimes. You’re not being graded.",
   "Keep going. Even if it’s slow. Even if it’s ugly. Especially then.",
+];
+
+const FORTUNE_OPENERS = [
+  "Today feels like a soft reset.",
+  "Today has a gentle kind of luck in it.",
+  "Your day is giving ‘quiet good news’.",
+  "A small win is already looking for you.",
+  "Something light is about to land on your shoulders (in a good way).",
+  "You’re not late. You’re arriving with better timing.",
+  "Your energy is getting a little brighter today.",
+  "You’re more supported than you think today.",
+  "Today is built for small, satisfying moments.",
+  "A calm decision will feel extra right today.",
+  "Today is less about proving, more about breathing.",
+  "You’re allowed to take it slow today—still counts.",
+  "Today wants you to be a little kinder to yourself.",
+  "Your patience is about to pay you back today.",
+  "Today’s vibe: steady, not stressed.",
+  "Today is a good day to choose ease on purpose.",
+  "Something you’ve been waiting for is moving.",
+  "Today is a good day to feel proud in small ways.",
+  "You’re going to handle today better than you expect.",
+  "Today is giving ‘you got this’ without the pressure.",
+];
+
+const FORTUNE_MIDDLES = [
+  "One simple choice will make the rest feel lighter.",
+  "A quick message or hello could turn your mood around.",
+  "You’ll notice a tiny sign that you’re on the right track.",
+  "Someone is going to appreciate your presence more than they say.",
+  "A small task you finish will unlock a bigger calm.",
+  "Your best idea might show up when you stop forcing it.",
+  "If you rest even a little, your brain will thank you.",
+  "You’ll feel better after you do the first 10%.",
+  "Something you feared will be easier than it looked in your head.",
+  "A peaceful boundary will save you energy today.",
+  "You’ll get a clean “yes” on something you’ve been unsure about.",
+  "A tiny reset (water, walk, stretch) will work surprisingly well.",
+  "You’re going to find the right words at the right time.",
+  "The right plan today is the one you can actually do.",
+  "You’ll feel a little spark of confidence return.",
+  "A small moment will remind you that life can be sweet.",
+  "You’ll get clarity by simplifying, not adding more.",
+  "A gentle win is waiting in your next step.",
+  "You’ll feel proud of yourself for showing up, even quietly.",
+  "Your focus will improve once you remove one distraction.",
+];
+
+const FORTUNE_ENDERS = [
+  "Keep it simple. You’re doing enough.",
+  "No need to rush—your pace is working.",
+  "Let it be a ‘one good thing at a time’ kind of day.",
+  "You don’t have to earn rest. You can just take it.",
+  "Choose the easy button once today. It’s allowed.",
+  "You’re not behind. You’re building.",
+  "Be gentle with yourself—today responds well to softness.",
+  "You’re allowed to enjoy the small stuff without guilt.",
+  "Your best is already showing, even if it’s quiet.",
+  "Let today be warm, not loud.",
+  "You can do less and still be proud.",
+  "If it’s not urgent, let it wait.",
+  "Treat yourself like someone you care about.",
+  "You’re doing fine. Breathe and continue.",
+  "You don’t need perfect. You need steady.",
 ];
 
 const SHOW_SOCIAL = false;
@@ -334,6 +398,10 @@ export default function Menu() {
   const navHiddenRef = useRef(false);
   const lastScrollY = useRef(0);
 
+  const [fortuneDismissedDay, setFortuneDismissedDay] = useState<string | null>(null);
+  const fortuneAnim = useRef(new Animated.Value(0)).current;
+  const fortuneAnimLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
@@ -345,6 +413,108 @@ export default function Menu() {
     const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     return `${date} • ${time}`;
   }, [nowMs]);
+
+  const dayStamp = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${da}`;
+  }, []);
+
+  const dayKeyNow = useMemo(() => {
+    const d = new Date(nowMs);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${da}`;
+  }, [nowMs]);
+
+  const hashStr = (s: string) => {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  };
+
+  const fortuneFor = (uidLike: string, dayKey: string) => {
+    const uid = String(uidLike || "").trim();
+    if (!uid) return "";
+    const seed = hashStr(`fortune|${dayKey}|${uid}`);
+    const a = FORTUNE_OPENERS[seed % FORTUNE_OPENERS.length];
+    const b = FORTUNE_MIDDLES[Math.floor(seed / 11) % FORTUNE_MIDDLES.length];
+    const c = FORTUNE_ENDERS[Math.floor(seed / 97) % FORTUNE_ENDERS.length];
+    const bonusSeed = hashStr(`fortuneX|${dayKey}|${uid}`);
+    const softAdd = [
+      "Also: treat yourself to something small.",
+      "Also: you’re allowed to say no politely.",
+      "Also: take the shortcut that saves your energy.",
+      "Also: a tiny cleanup can feel like a fresh start.",
+      "Also: reply later if you need to.",
+      "Also: drink water, then decide.",
+      "Also: a short walk counts.",
+      "Also: laugh a little—it helps.",
+      "Also: your calm is doing something.",
+      "Also: choose comfort where you can.",
+      "Also: you don’t need to explain everything.",
+      "Also: you’re not failing—you’re learning.",
+    ][bonusSeed % 12];
+
+    return `${a} ${b} ${c} ${softAdd}`;
+  };
+
+  const showFortune = useMemo(() => {
+    if (!auth.currentUser || !myUid) return false;
+    return (fortuneDismissedDay || "") !== dayKeyNow;
+  }, [fortuneDismissedDay, dayKeyNow, myUid]);
+
+  const fortuneText = useMemo(() => {
+    if (!myUid || !auth.currentUser) return "";
+    return fortuneFor(myUid, dayKeyNow);
+  }, [myUid, dayKeyNow]);
+
+  useEffect(() => {
+    if (!showFortune) {
+      try {
+        fortuneAnimLoopRef.current?.stop?.();
+      } catch {}
+      fortuneAnimLoopRef.current = null;
+      fortuneAnim.stopAnimation(() => {
+        fortuneAnim.setValue(0);
+      });
+      return;
+    }
+
+    fortuneAnim.setValue(0);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(fortuneAnim, { toValue: 1, duration: 900, useNativeDriver: false }),
+        Animated.timing(fortuneAnim, { toValue: 2, duration: 900, useNativeDriver: false }),
+        Animated.timing(fortuneAnim, { toValue: 3, duration: 900, useNativeDriver: false }),
+        Animated.timing(fortuneAnim, { toValue: 4, duration: 900, useNativeDriver: false }),
+        Animated.timing(fortuneAnim, { toValue: 0, duration: 900, useNativeDriver: false }),
+      ])
+    );
+
+    fortuneAnimLoopRef.current = loop;
+    loop.start();
+
+    return () => {
+      try {
+        loop.stop();
+      } catch {}
+      fortuneAnimLoopRef.current = null;
+    };
+  }, [showFortune]);
+
+  const fortuneColor = useMemo(() => {
+    return fortuneAnim.interpolate({
+      inputRange: [0, 1, 2, 3, 4],
+      outputRange: ["#F59E0B", "#EC4899", "#A855F7", "#3B82F6", "#10B981"],
+    });
+  }, [fortuneAnim]);
 
   const assetFor = (v: any) => {
     if (!v || typeof v !== "string") return null;
@@ -387,23 +557,6 @@ export default function Menu() {
     return null;
   };
 
-  const dayStamp = useMemo(() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const da = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${da}`;
-  }, []);
-
-  const hashStr = (s: string) => {
-    let h = 2166136261;
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  };
-
   const uniqueTagForUid = (uidLike: string | null | undefined) => {
     const uid = typeof uidLike === "string" ? uidLike.trim() : "";
     if (!uid) return "";
@@ -436,6 +589,7 @@ export default function Menu() {
       setMyUid(uid);
       setMyPhotoUrl(null);
       setMyPhotoVer(0);
+      setFortuneDismissedDay(null);
     });
     return () => unsub();
   }, []);
@@ -456,12 +610,16 @@ export default function Menu() {
             ? data.updatedAt
             : 0;
 
+        const dismissed = typeof data?.fortuneDismissedDay === "string" ? data.fortuneDismissedDay.trim() : null;
+
         setMyPhotoUrl(nextPhoto);
         setMyPhotoVer(Math.max(0, Math.floor(nextVer || 0)));
+        setFortuneDismissedDay(dismissed || null);
       },
       () => {
         setMyPhotoUrl(null);
         setMyPhotoVer(0);
+        setFortuneDismissedDay(null);
       }
     );
     return () => unsub();
@@ -760,7 +918,7 @@ export default function Menu() {
     if (s < 60) return `${s}s`;
 
     const m = Math.floor(sRaw / 60);
-    if (m < 60) return `${m}mi`;
+    if (m < 60) return `${m}m`;
 
     const h = Math.floor(m / 60);
     if (h < 24) return `${h}h`;
@@ -917,6 +1075,32 @@ export default function Menu() {
     outputRange: [1, 1],
   });
 
+  const dismissFortuneToday = async () => {
+    if (!auth.currentUser || !myUid) return;
+    const day = dayKeyNow;
+    setFortuneDismissedDay(day);
+    try {
+      await setDoc(
+        doc(db, "users", myUid),
+        {
+          fortuneDismissedDay: day,
+          fortuneDismissedAt: serverTimestamp(),
+          fortuneDismissedAtMs: Date.now(),
+        } as any,
+        { merge: true }
+      );
+    } catch {}
+  };
+
+  const onThoughtGenerate = async () => {
+    if (showFortune) {
+      await dismissFortuneToday();
+      setTIndex((i) => i + 1);
+      return;
+    }
+    setTIndex((i) => i + 1);
+  };
+
   return (
     <ThemedView style={styles.container}>
       <StatusBar style="light" backgroundColor="#000" translucent />
@@ -954,13 +1138,18 @@ export default function Menu() {
           <View style={styles.thoughtCard}>
             <View style={styles.thoughtHead}>
               <ThemedText style={styles.thoughtLabel} numberOfLines={2}>
-                Random Thoughts
+                {showFortune ? "Your Fortune Today" : "Random Thoughts"}
               </ThemedText>
-              <Pressable style={({ pressed }) => [styles.thoughtBtn, pressed && styles.pressed]} onPress={() => setTIndex((i) => i + 1)}>
+              <Pressable style={({ pressed }) => [styles.thoughtBtn, pressed && styles.pressed]} onPress={onThoughtGenerate}>
                 <ThemedText style={styles.thoughtBtnText}>Generate</ThemedText>
               </Pressable>
             </View>
-            <ThemedText style={styles.thoughtText}>{thought}</ThemedText>
+
+            {showFortune ? (
+              <Animated.Text style={[styles.thoughtText, { color: fortuneColor, fontFamily: "Poppins_400Regular" }]}>{fortuneText}</Animated.Text>
+            ) : (
+              <ThemedText style={styles.thoughtText}>{thought}</ThemedText>
+            )}
           </View>
         </View>
 
