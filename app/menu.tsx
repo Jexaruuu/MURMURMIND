@@ -1,4 +1,3 @@
-// menu.tsx
 import HomeNavigation from "@/components/homenavigation";
 import Navigation from "@/components/navigation";
 import { ThemedText } from "@/components/themed-text";
@@ -1661,12 +1660,15 @@ export default function Menu() {
 
         <View style={styles.sectionHead}>
           <ThemedText style={styles.sectionTitle}>{isMineActive ? "Own Thoughts" : "Latest posts"}</ThemedText>
+
           <View style={styles.sectionRight}>
-            <ThemedText style={styles.sectionHint}>{isMineActive ? "Only yours" : "Most recent first"}</ThemedText>
+            <ThemedText style={styles.sectionHint}>{isMineActive ? "Only yours" : "Most recent"}</ThemedText>
+
             <View style={styles.filterRow}>
               <Pressable style={({ pressed }) => [styles.filterPill, feedMode === "all" && styles.filterPillActive, pressed && styles.pressed]} onPress={setAll}>
                 <ThemedText style={[styles.filterPillText, feedMode === "all" && styles.filterPillTextActive]}>All</ThemedText>
               </Pressable>
+
               <Pressable
                 style={({ pressed }) => [
                   styles.filterPill,
@@ -2080,31 +2082,40 @@ const styles = StyleSheet.create({
   thoughtBtnText: { color: "#111", fontSize: 12, letterSpacing: 0.3, textTransform: "uppercase", fontFamily: "Poppins_600SemiBold" },
   thoughtText: { color: "white", lineHeight: 22, marginTop: 2, fontFamily: "Poppins_400Regular" },
 
-  sectionHead: { marginTop: 14, paddingHorizontal: 2, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 10 },
+  sectionHead: { marginTop: 14, paddingHorizontal: 2, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   sectionTitle: { fontSize: 13, color: "#111", letterSpacing: 0.3, fontFamily: "Poppins_600SemiBold" },
   sectionHint: { fontSize: 12, color: "#6b7280", fontFamily: "Poppins_400Regular" },
-sectionRight: {
-  flexDirection: "column",
-  alignItems: "flex-end",
-  gap: 6,
-  flexShrink: 0,
-},
-  filterRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" },
+  sectionRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 0,
+  },
+
+  filterRow: { flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "flex-end" },
   filterPill: {
-  height: 28,
-  paddingHorizontal: 12,
-  minWidth: 56,
-  borderRadius: 999,
-  backgroundColor: "#fff",
-  borderWidth: 1,
-  borderColor: "#e5e7eb",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-},
+    height: 28,
+    paddingHorizontal: 14,
+    minWidth: 64,
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
   filterPillActive: { backgroundColor: "#111", borderColor: "#111" },
   filterPillDisabled: { opacity: 0.55 },
-  filterPillText: { fontSize: 11, color: "#111", letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },
+  filterPillText: {
+    fontSize: 11,
+    color: "#111",
+    letterSpacing: 0.2,
+    fontFamily: "Poppins_600SemiBold",
+    includeFontPadding: false,
+    textAlign: "center",
+    paddingHorizontal: 1,
+  },
   filterPillTextActive: { color: "white" },
 
   feedWrap: { marginTop: 10, gap: 10 },
