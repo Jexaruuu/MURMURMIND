@@ -1,35 +1,48 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { UserProfileProvider } from "@/context/user-profile-context";
+import { Stack } from "expo-router";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
+export default function RootLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-    </Tabs>
+    <UserProfileProvider>
+      <Stack initialRouteName="welcome" screenOptions={{ headerShown: false }}>
+        <Stack.Screen
+          name="welcome"
+          options={{ animation: "slide_from_right", gestureEnabled: true, gestureDirection: "horizontal" }}
+        />
+        <Stack.Screen
+          name="login"
+          options={{ animation: "slide_from_left", gestureEnabled: true, gestureDirection: "horizontal" }}
+        />
+        <Stack.Screen
+          name="signup"
+          options={{ animation: "slide_from_right", gestureEnabled: true, gestureDirection: "horizontal" }}
+        />
+ <Stack.Screen
+          name="menu"
+          options={({ route }) => {
+            const anim = (route.params as { anim?: "fromRight" | "fromLeft" } | undefined)?.anim;
+
+            return {
+              animation: anim === "fromLeft" ? "slide_from_left" : "slide_from_right",
+              gestureEnabled: true,
+              gestureDirection: "horizontal",
+            };
+          }}
+        />
+  <Stack.Screen
+    name="compose"
+    options={({ route }) => {
+      const anim = (route.params as { anim?: "fromRight" | "fromLeft" } | undefined)?.anim;
+
+      return {
+        animation: anim === "fromRight" ? "slide_from_right" : "slide_from_left",
+        gestureEnabled: true,
+        gestureDirection: "horizontal",
+      };
+    }}
+  />
+        <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+      </Stack>
+    </UserProfileProvider>
   );
 }
