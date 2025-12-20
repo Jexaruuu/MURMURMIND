@@ -67,7 +67,7 @@ export default function Signup() {
         updatedAt: serverTimestamp(),
       });
 
-      router.replace({ pathname: "/menu", params: { anim: "fromRight" } });
+      router.replace({ pathname: "/", params: { anim: "fromRight" } });
     } catch (e: any) {
       setError(prettyAuthError(e?.message || String(e)));
     } finally {

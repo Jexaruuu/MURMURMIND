@@ -1635,7 +1635,7 @@ export default function Menu() {
             <View style={styles.heroLeft}>
               <ThemedText style={styles.heroKicker}>{liveDateTime}</ThemedText>
               <ThemedText type="title" style={styles.heroTitle}>
-                Our Thoughts.
+                Welcome to Murmurmind.
               </ThemedText>
               <ThemedText style={styles.heroSub}>{headerSubtitle}</ThemedText>
             </View>
@@ -1660,7 +1660,7 @@ export default function Menu() {
         </View>
 
         <View style={styles.sectionHead}>
-          <ThemedText style={styles.sectionTitle}>{isMineActive ? "My thoughts" : "Latest posts"}</ThemedText>
+          <ThemedText style={styles.sectionTitle}>{isMineActive ? "Own Thoughts" : "Latest posts"}</ThemedText>
           <View style={styles.sectionRight}>
             <ThemedText style={styles.sectionHint}>{isMineActive ? "Only yours" : "Most recent first"}</ThemedText>
             <View style={styles.filterRow}>
@@ -1676,7 +1676,7 @@ export default function Menu() {
                 ]}
                 onPress={setMine}
               >
-                <ThemedText style={[styles.filterPillText, feedMode === "mine" && styles.filterPillTextActive]}>My thoughts</ThemedText>
+                <ThemedText style={[styles.filterPillText, feedMode === "mine" && styles.filterPillTextActive]}>Own</ThemedText>
               </Pressable>
             </View>
           </View>
@@ -2083,18 +2083,25 @@ const styles = StyleSheet.create({
   sectionHead: { marginTop: 14, paddingHorizontal: 2, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 10 },
   sectionTitle: { fontSize: 13, color: "#111", letterSpacing: 0.3, fontFamily: "Poppins_600SemiBold" },
   sectionHint: { fontSize: 12, color: "#6b7280", fontFamily: "Poppins_400Regular" },
-  sectionRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  filterRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+sectionRight: {
+  flexDirection: "column",
+  alignItems: "flex-end",
+  gap: 6,
+  flexShrink: 0,
+},
+  filterRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" },
   filterPill: {
-    height: 28,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  height: 28,
+  paddingHorizontal: 12,
+  minWidth: 56,
+  borderRadius: 999,
+  backgroundColor: "#fff",
+  borderWidth: 1,
+  borderColor: "#e5e7eb",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+},
   filterPillActive: { backgroundColor: "#111", borderColor: "#111" },
   filterPillDisabled: { opacity: 0.55 },
   filterPillText: { fontSize: 11, color: "#111", letterSpacing: 0.2, fontFamily: "Poppins_600SemiBold" },

@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 const fallbackAvatar = require("@/assets/images/murmurblack.png");
 const editPlaceholder = require("@/assets/images/murmurblack.png");
 
-const MENU_WIDTH = 260;
+const MENU_WIDTH = 290;
 const MENU_ICON_SIZE = 18;
 
 const ASSET_PREFIX = "asset:";

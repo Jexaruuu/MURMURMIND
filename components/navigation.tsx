@@ -297,11 +297,9 @@ export default function Navigation() {
             if (avatarCanError) markPhotoBroken();
           }}
         />
-        <View style={styles.nameRow}>
-          <ThemedText style={styles.userName} numberOfLines={1}>
-            {profile.username}
-          </ThemedText>
-          <ThemedText style={styles.userSep}>|</ThemedText>
+
+        <View style={styles.nameCol}>
+          <ThemedText style={styles.userName}>{profile.username}</ThemedText>
           <ThemedText style={styles.userAlias} numberOfLines={1}>
             {alias}
           </ThemedText>
@@ -382,12 +380,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+
   userWrap: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
   userAvatar: { width: 25, height: 25, borderRadius: 8, backgroundColor: "#e5e7eb" },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 },
-  userName: { fontSize: 16, color: "#ffffff", fontFamily: "Poppins_600SemiBold", maxWidth: 170 },
-  userSep: { fontSize: 14, color: "rgba(255,255,255,0.65)", fontFamily: "Poppins_400Regular" },
-  userAlias: { fontSize: 12, color: "rgba(255,255,255,0.8)", fontFamily: "Poppins_400Regular", flex: 1, minWidth: 0 },
+
+  nameCol: { flex: 1, minWidth: 0 },
+  userName: { fontSize: 16, color: "#ffffff", fontFamily: "Poppins_600SemiBold", flexWrap: "wrap" },
+  userAlias: { marginTop: 1, fontSize: 12, color: "rgba(255,255,255,0.8)", fontFamily: "Poppins_400Regular" },
 
   rightActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   iconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", position: "relative" },

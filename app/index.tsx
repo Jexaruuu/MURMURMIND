@@ -1,9 +1,10 @@
 import { auth } from "@/firebase";
-import { Redirect } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useEffect, useState } from "react";
 
 export default function Index() {
+  const params = useLocalSearchParams<{ anim?: "fromLeft" | "fromRight" }>();
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
@@ -17,13 +18,14 @@ export default function Index() {
 
   if (!ready) return null;
 
+  if (!user) return <Redirect href="/welcome" />;
+
   return (
     <Redirect
-      href={
-        user
-          ? { pathname: "/menu", params: { anim: "fromRight" } }
-          : "/welcome"
-      }
+      href={{
+        pathname: "/menu",
+        params: { anim: params?.anim === "fromLeft" ? "fromLeft" : "fromRight" },
+      }}
     />
   );
 }
