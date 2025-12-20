@@ -51,7 +51,7 @@ export default function Login() {
     setSubmitting(true);
     try {
       await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
-      router.replace("/menu");
+      router.replace({ pathname: "/menu", params: { anim: "fromLeft" } });
     } catch (e: any) {
       setError(prettyAuthError(e?.message || String(e)));
     } finally {
@@ -135,7 +135,7 @@ export default function Login() {
             <ThemedText style={[styles.sub, { fontFamily: "Poppins_400Regular" }]} />
             <View style={styles.field} />
             <View style={styles.field} />
-            <Pressable onPress={() => router.push("/menu")} style={styles.loginBtnWrap} />
+            <Pressable onPress={() => router.push({ pathname: "/menu", params: { anim: "fromLeft" } })} style={styles.loginBtnWrap} />
           </View>
         </View>
       </View>
@@ -179,7 +179,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb"
+    borderColor: "#e5e7eb",
+    color: "#000"
   },
 
   loginBtnWrap: { width: "100%", borderRadius: 18, overflow: "hidden" },

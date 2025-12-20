@@ -67,7 +67,7 @@ export default function Signup() {
         updatedAt: serverTimestamp(),
       });
 
-      router.replace("/menu");
+      router.replace({ pathname: "/menu", params: { anim: "fromRight" } });
     } catch (e: any) {
       setError(prettyAuthError(e?.message || String(e)));
     } finally {
@@ -224,6 +224,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: "#e5e7eb",
+    color: "#000"
   },
 
   loginBtnWrap: { width: "100%", borderRadius: 18, overflow: "hidden" },
